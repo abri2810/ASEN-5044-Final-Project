@@ -73,3 +73,82 @@ eig(F);
 % The system is marginally stable because all eigenvalues lie on the unit
 % circle.
 
+%% part 3
+
+tf = 100; %seconds
+
+% initialize state vectors
+tarr = 0:dt:(tf); % t vector
+du = zeros(4,length(tarr)); % du vector
+deltx0 = [0; 1; 0; 0; 0; 0.1]; %dx0
+d_state = nan(6,length(tarr)); %dx
+d_state(:,1) = deltx0;
+
+% nominal solution
+vg_nom = 2; %m/s
+phi_nom = -pi/18; %rad
+va_nom = 12; %m/s
+omegaa_nom = pi/25; %rad/s
+thetag_dot_nom = v_g/L*tan(phi_nom);
+theta_g_nom = theta_g+thetag_dot_nom*tarr;
+thetaa_dot_nom = omegaa_nom;
+theta_a_nom = theta_a+thetaa_dot_nom*tarr;
+
+xnom = [xi_g0+v_g/thetag_dot_nom*sin(theta_g_nom)-v_g/thetag_dot_nom*sin(theta_g);...
+        eta_g0-v_g/thetag_dot_nom*cos(theta_g_nom)-v_g/thetag_dot_nom*cos(theta_g);...
+        theta_g_nom;...
+        xi_a0+v_a/thetaa_dot_nom*sin(theta_a_nom)-v_a/thetaa_dot_nom*sin(theta_a);...
+        eta_a0-v_a/thetaa_dot_nom*cos(theta_a_nom)-v_a/thetaa_dot_nom*cos(theta_a);...
+        theta_a_nom];
+
+% solve for dx_k+1
+for i = 2:length(tarr)
+    d_state(:,i) = F*d_state(:,i-1) + G*du(:,i-1);
+end
+
+full_state = xnom + d_state; % x = x_nom + dx
+
+% full state solved with ODE45
+my_ode = @(t,y) NL_ode(t,y,vg_nom,phi_nom,va_nom,omegaa_nom,[0;0;0],[0;0;0],L);
+[t,yarr] = ode45(my_ode,tarr,[x1;x2;x3;x4;x5;x6]+deltx0);
+yarr=yarr';
+yarr(3,:) = mod(yarr(3,:)+pi,2*pi)-pi;
+yarr(6,:) = mod(yarr(6,:)+pi,2*pi)-pi;
+
+% plot perturbations
+figure
+for i=1:size(full_state,1)
+    subplot(size(full_state,1),1,i)
+    plot(tarr,d_state(i,:),DisplayName="linear")
+end
+
+
+
+%% Functions
+function yd = NL_ode(t,y,vg,phi,va,wa,w_tild_g,w_tild_a,L)
+    xi_g=y(1);
+    etag=y(2);
+    theta_g=y(3);
+    xi_a=y(4);
+    etaa=y(5);
+    theta_a=y(6);
+    
+    w_tild_xg = w_tild_g(1);
+    w_tild_yg = w_tild_g(2);
+    w_tild_wg = w_tild_g(3);
+
+    w_tild_xa = w_tild_a(1);
+    w_tild_ya = w_tild_a(2);
+    w_tild_wa = w_tild_a(3);
+
+
+    xi_g_dot = vg*cos(theta_g)+w_tild_xg;
+    etag_dot = vg*sin(theta_g)+w_tild_yg;
+    theta_g_dot = vg/L*tan(phi)+w_tild_wg;
+
+    xi_a_dot = va*cos(theta_a)+w_tild_xa;
+    etaa_dot = va*sin(theta_a)+w_tild_ya;
+    theta_a_dot = wa+w_tild_wa;
+    
+    yd = [xi_g_dot; etag_dot; theta_g_dot; xi_a_dot; etaa_dot; theta_a_dot];
+end
