@@ -4,7 +4,8 @@
 
 % Housekeeping
 clear; 
-
+clc
+close all
 
 %% Part I, Problem 1.
 
@@ -30,8 +31,10 @@ omega_a = pi/25;
 % delta T sampling rate
 dt = .1;
 
-u1 = [v_g; phi_g];
-u2 = [v_a; omega_a];
+u1 = v_g;
+u2 = phi_g;
+u3 = v_a;
+u4 = omega_a;
 x1 = xi_g0;
 x2 = eta_g0;
 x3 = theta_g;
@@ -42,16 +45,16 @@ x6 = theta_a;
 
 % ------- Jacobians -------
 
-Abar = [0 0 -u1(1,:)*sin(x3) 0 0 0; ...
-        0 0 u1(1,:)*cos(x3) 0 0 0;...
+Abar = [0 0 -u1*sin(x3) 0 0 0; ...
+        0 0 u1*cos(x3) 0 0 0;...
         0 0 0 0 0 0; ...
-        0 0 0 0 0 -u2(1,:)*sin(x6); ...
-        0 0 0 0 0 u2(1,:)*cos(x6); ...
+        0 0 0 0 0 -u3*sin(x6); ...
+        0 0 0 0 0 u3*cos(x6); ...
         0 0 0 0 0 0];
 
 Bbar = [cos(x3) 0 0 0; ...
         sin(x3) 0 0 0; ...
-        (1/L)*tan(u1(2,:)) (u1(1,:)/L)*sec(u1(2,:)).^2 0 0; ...
+        (1/L)*tan(u2) u1/L*(sec(u2))^2 0 0; ...
         0 0 cos(x6) 0; ...
         0 0 sin(x6) 0; ...
         0 0 0 1];
@@ -95,6 +98,7 @@ tf = 100; %seconds
 tarr = 0:dt:(tf); % t vector
 du = zeros(4,length(tarr)); % du vector
 deltx0 = [0; 1; 0; 0; 0; 0.1]; %dx0
+% deltx0 = [x1; x2; x3; x4; x5; x6];
 d_state = nan(6,length(tarr)); %dx
 d_state(:,1) = deltx0;
 
@@ -133,9 +137,17 @@ yarr(6,:) = mod(yarr(6,:)+pi,2*pi)-pi;
 figure
 for i=1:size(full_state,1)
     subplot(size(full_state,1),1,i)
-    plot(tarr,d_state(i,:),DisplayName="linear")
+    %plot(tarr,d_state(i,:),DisplayName="linear")
+    plot(tarr,d_state(i,:))
 end
 
+% full state
+figure
+for i=1:size(full_state,1)
+    subplot(size(full_state,1),1,i)
+    %plot(tarr,d_state(i,:),DisplayName="linear")
+    plot(tarr,full_state(i,:))
+end
 
 
 %% Functions
