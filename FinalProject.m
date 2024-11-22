@@ -5,8 +5,10 @@
 % Housekeeping
 clear; 
 
-% Part I
-% Problem 1.
+
+%% Part I, Problem 1.
+
+% ---- nominal conditions -----
 
 L = .5;
 %phi_g is between -5*pi/12 to 5*pi/12
@@ -25,6 +27,7 @@ theta_a = -pi/2;
 v_a = 12;
 omega_a = pi/25;
 
+% delta T sampling rate
 dt = .1;
 
 u1 = [v_g; phi_g];
@@ -36,11 +39,22 @@ x4 = xi_a0;
 x5 = eta_a0;
 x6 = theta_a;
 
-Abar = [0 0 -u1(1,:)*sin(x3) 0 0 0; 0 0 u1(2,:)*cos(x3) 0 0 0; 0 0 0 0 0 0; 0 0 0 0 0 -u2(1,:)*sin(x6); ...
-        0 0 0 0 0 u2(2,:)*cos(x6); 0 0 0 0 0 0];
 
-Bbar = [cos(x3) 0 0 0; sin(x3) 0 0 0; (1/L)*tan(u2(1,:)) (u1(1,:)/L)*sec(u2(2,:)).^2 0 0; ...
-        0 0 cos(x6) 0; 0 0 sin(x6) 0; 0 0 0 1];
+% ------- Jacobians -------
+
+Abar = [0 0 -u1(1,:)*sin(x3) 0 0 0; ...
+        0 0 u1(1,:)*cos(x3) 0 0 0;...
+        0 0 0 0 0 0; ...
+        0 0 0 0 0 -u2(1,:)*sin(x6); ...
+        0 0 0 0 0 u2(1,:)*cos(x6); ...
+        0 0 0 0 0 0];
+
+Bbar = [cos(x3) 0 0 0; ...
+        sin(x3) 0 0 0; ...
+        (1/L)*tan(u1(2,:)) (u1(1,:)/L)*sec(u1(2,:)).^2 0 0; ...
+        0 0 cos(x6) 0; ...
+        0 0 sin(x6) 0; ...
+        0 0 0 1];
 
 abv = (x4-x1)^2 + (x5-x2)^2;
 Cbar = [(x5-x2)/abv (x1-x4)/abv -1 (x2-x5)/abv (x4-x1)/abv 0; ...
@@ -52,7 +66,7 @@ Cbar = [(x5-x2)/abv (x1-x4)/abv -1 (x2-x5)/abv (x4-x1)/abv 0; ...
 Dbar = zeros(5,4);
 
 
-%% Part 2
+%% Part I, Problem 2.
 
 z = [Abar Bbar; zeros(4,6) zeros(4)];
 ez = expm(z*dt);
@@ -73,7 +87,7 @@ eig(F);
 % The system is marginally stable because all eigenvalues lie on the unit
 % circle.
 
-%% part 3
+%% Part I, Problem 3.
 
 tf = 100; %seconds
 
