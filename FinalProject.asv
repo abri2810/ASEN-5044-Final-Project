@@ -37,6 +37,7 @@ u2 = phi_g;
 u3 = v_a;
 u4 = omega_a;
 
+% nominal x(t) vector components 
 x1 = xi_g0;
 x2 = eta_g0;
 x3 = theta_g;
@@ -123,6 +124,7 @@ xnom = [xi_g0+v_g/thetag_dot_nom*sin(theta_g_nom)-v_g/thetag_dot_nom*sin(theta_g
 
 % solve for dx_k+1
 for i = 2:length(tarr)
+    F = expm(Abar*tarr(i))
     d_state(:,i) = F*d_state(:,i-1) + G*du(:,i-1);
 end
 
@@ -150,6 +152,11 @@ for i=1:size(full_state,1)
     %plot(tarr,d_state(i,:),DisplayName="linear")
     plot(tarr,full_state(i,:))
 end
+
+
+%% Part II, Problem 4. 
+
+coopData = load('cooplocalization_finalproj_KFdata.mat');
 
 
 %% Functions

@@ -153,6 +153,14 @@ for i=1:size(full_state,1)
 end
 
 
+%% Part II, Problem 4. 
+
+coopData = load('cooplocalization_finalproj_KFdata.mat');
+Q = coopData.Qtrue;
+R = coopData.Rtrue;
+ydata = coopData.ydata;
+
+
 %% Functions
 function yd = NL_ode(t,y,vg,phi,va,wa,w_tild_g,w_tild_a,L)
     xi_g=y(1);
