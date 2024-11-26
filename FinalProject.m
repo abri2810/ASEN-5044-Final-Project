@@ -11,30 +11,33 @@ close all
 
 % ---- nominal conditions -----
 
-L = .5;
-%phi_g is between -5*pi/12 to 5*pi/12
-%v_gmax = 3;
-%omega_g is between -pi/6 to pi/6
-%v_a is between 10 and 20
+L = 0.5; % UGV base length
+    % phi_g is between -5*pi/12 to 5*pi/12
+    % v_gmax = 3;
+    % omega_g is between -pi/6 to pi/6
+    % v_a is between 10 and 20
 xi_g0 = 10;
 eta_g0 = 0;
 theta_g = pi/2;
-v_g = 2;
-phi_g = -pi/18;
+v_g = 2; % UGV nominal speed (m/s)
+phi_g = -pi/18; % UGV nominal steering angle (rad)
 
 xi_a0 = -60;
 eta_a0 = 0;
 theta_a = -pi/2;
-v_a = 12;
-omega_a = pi/25;
+v_a = 12; % UAV nominal s peed (m/s)
+omega_a = pi/25; % UAV nominal turning rate (rad/s)
 
 % delta T sampling rate
 dt = .1;
 
+% nominal u(t) vector components 
 u1 = v_g;
 u2 = phi_g;
 u3 = v_a;
 u4 = omega_a;
+
+% nominal x(t) vector components 
 x1 = xi_g0;
 x2 = eta_g0;
 x3 = theta_g;
@@ -148,6 +151,14 @@ for i=1:size(full_state,1)
     %plot(tarr,d_state(i,:),DisplayName="linear")
     plot(tarr,full_state(i,:))
 end
+
+
+%% Part II, Problem 4. 
+
+coopData = load('cooplocalization_finalproj_KFdata.mat');
+Q = coopData.Qtrue;
+R = coopData.Rtrue;
+ydata = coopData.ydata;
 
 
 %% Functions
