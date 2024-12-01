@@ -176,10 +176,53 @@ sgtitle('ODE Measurements Minus Linearization Measurements','FontSize',14, 'Inte
 
 %% Part II, Problem 4. 
 
+% load the data, R, and Q matrices 
 coopData = load('cooplocalization_finalproj_KFdata.mat');
 Q = coopData.Qtrue;
 R = coopData.Rtrue;
 ydata = coopData.ydata;
+
+% initialize stuff 
+P0 = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
+MC_num = 100; % number of monte carlo simulations
+NEES = zeros(MC_num,length(tarr));
+NIS = zeros(MC_num,length(tarr));
+dxhat_all = zeros(6,length(tarr),MC_num);
+noisy_y = zeros(5, length(tarr),MC_num);
+
+
+% ----- super iffy on the code below ----------
+
+for m = 1:MC_num % for each MC iteration
+    % simulate noisy measurement for each iteration
+        % create random measurement noise
+        v = mvnrnd([0;0;0;0;0],R,length(tarr));
+        % simulate measurement 
+        noisy_y(:,:,m) = ydata + v' ;
+            % this gives a new noisy measurement for each monte carlo
+            % iteration. this will be used as input to the KF to produce
+            % state estimates and predicted measurements
+
+    % initialize KF
+    dxhat0 = deltx0; % initial PERTURBATION state estimate
+    P = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
+    dxhat = zeros(6,length(tarr));
+    dxhat(:,1) = xhat0;
+    du0 = [0;0;0;0;0;0]; % ADD REAL NUMBERS TO THIS LATER
+    du = zeros(6,length(tarr));
+
+    for k = 2:length(tarr) % for each timestep k 
+        F_t = F(:,:,k-1); % time-varying F matrix
+        H_t = H(:,:,k-1); % time-varying H matrix
+        G_t = G(:,:,k-1); % time varying G matrix
+
+        % prediction step
+        dxhat_minus = F_t*dxhat(:,k-1) + G_t*du(:,k-1);
+
+    end
+    dxhat_all(:,:,m) = dxhat;
+end
+
 
 %% validation
 for i=1:length(tarr)
