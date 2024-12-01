@@ -64,7 +64,7 @@ xnom = [xi_g0+v_g0/thetag_dot_nom*sin(theta_g_nom)-v_g0/thetag_dot_nom*sin(theta
 
 unom = repmat(unom_t0,1,length(tarr));
 
-[Abar,Bbar,Cbar,Dbar,F,G,H,M] = get_dynamics_matricies(xnom,unom,dt,L);
+[Abar,Bbar,Cbar,Dbar,F,G,H,M] = get_dynamics_matrices(xnom,unom,dt,L);
 
 % Observability
 %ob = [H; H*F; H*F^2; H*F^3; H*F^4; H*F^5];
@@ -115,45 +115,64 @@ y_linearized = ynom+d_y;
 y_ode = calc_obs_from_state(state_perturbed_ode,vtilde_nom);
 
 % plotting
-xunits = {'\xi_g (m)','\eta_g (m)','\theta_g (rad)','\xi_a (m)','\eta_a (m)','\theta_a (rad)'};
-dxunits = {'\delta\xi_g (m)','\delta\eta_g (m)','\delta\theta_g (rad)','\delta\xi_a (m)','\delta\eta_a (m)','\delta\theta_a (rad)'};
-yunits = {'\gamma_{ag} (rad)','\rho_{ga} (m)','\gamma_{ga} (rad)','xi_a (m)','eta_a (m)'};
-wrap_indicies_x = [3,6];
-wrap_indicies_y = [1,3];
+xunits = {'$\xi_g$ (m)','$\eta_g$ (m)','$\theta_g$ (rad)','$\xi_a$ (m)','$\eta_a$ (m)','$\theta_a$ (rad)'};
+dxunits = {'$\delta \xi_g$ (m)','$\delta \eta_g$ (m)','$\delta \theta_g$ (rad)','$\delta \xi_a$ (m)','$\delta \eta_a$ (m)','$\delta \theta_a$ (rad)'};
+yunits = {'$\gamma_{ag}$ (rad)','$\rho_{ga}$ (m)','$\gamma_{ga}$ (rad)','$\xi_a$ (m)','$\eta_a$ (m)'};
+dyunits = {'$\delta \gamma_{ag}$ (rad)','$\delta \rho_{ga}$ (m)','$\delta \gamma_{ga}$ (rad)','$\delta \xi_a$ (m)','$\delta \eta_a$ (m)'};
+wrap_indices_x = [3,6];
+wrap_indices_y = [1,3];
 % plot linearized perturbations
-% fig1 = figure('units','normalized','outerposition',[0 1 .5 1]);
-% plot_states(tarr,d_state,dxunits,[])
-% sgtitle('Linearized approx perturbations vs. Time')
+%fig1 = figure('units','normalized','outerposition',[0 1 .5 1]);
+figure()
+plot_states(tarr,d_state,dxunits,[])
+sgtitle('Linearized Approximate Perturbations vs. Time','FontSize',14, 'Interpreter','latex')
 
 % plot full linearized state
-fig2 = figure('units','normalized','outerposition',[0 1 .5 1]);
-plot_states(tarr,full_state,xunits,wrap_indicies_x)
-sgtitle('States vs. Time, Linearized Approximate Dynamics Simulation')
+% fig2 = figure('units','normalized','outerposition',[0 1 .5 1]);
+%   ^ This line of code isn't compatible with matlab 2024a, had to change it!
+figure()
+plot_states(tarr,full_state,xunits,wrap_indices_x)
+sgtitle('States vs. Time, Linearized Approximate Dynamics Simulation','FontSize',14, 'Interpreter','latex')
 
 % States vs. Time, Full Nonlinear Dynamics Simulation
-fig3 = figure('units','normalized','outerposition',[0 1 .5 1]);
-plot_states(tarr,state_perturbed_ode,xunits,wrap_indicies_x)
-sgtitle('States vs. Time, Full Nonlinear Dynamics Simulation')
+% fig3 = figure('units','normalized','outerposition',[0 1 .5 1]);
+%   ^ This line of code isn't compatible with matlab 2024a, had to change it!
+figure()
+plot_states(tarr,state_perturbed_ode,xunits,wrap_indices_x)
+sgtitle('States vs. Time, Full Nonlinear Dynamics Simulation','FontSize',14, 'Interpreter','latex')
+
 
 % plot measurements, linearized
-fig4 = figure('units','normalized','outerposition',[0 1 .5 1]);
+%fig4 = figure('units','normalized','outerposition',[0 1 .5 1]);
+%   ^ This line of code isn't compatible with matlab 2024a, had to change it!
+figure()
 plot_states(tarr,y_linearized,yunits,[1,3])
-sgtitle('Linearized Approximate Dynamics Measurements')
+sgtitle('Linearized Approximate Dynamics Measurements','FontSize',14, 'Interpreter','latex')
+
 
 % plot measurements from ode
-fig5 = figure('units','normalized','outerposition',[0 1 .5 1]);
+%fig5 = figure('units','normalized','outerposition',[0 1 .5 1]);
+%   ^ This line of code isn't compatible with matlab 2024a, had to change it!
+figure()
 plot_states(tarr,y_ode,yunits,[1,3])
-sgtitle('Full Nonlinear Measurements')
+sgtitle('Full Nonlinear Measurements','FontSize',14, 'Interpreter','latex')
+
 
 % Full Nonlinear Dynamics Simulation minus full linearized state
-fig3 = figure('units','normalized','outerposition',[0 1 .5 1]);
-plot_states(tarr,state_perturbed_ode-full_state,xunits,wrap_indicies_x)
-sgtitle('States vs. Time, ODE minus Linearization')
+%fig6 = figure('units','normalized','outerposition',[0 1 .5 1]);
+%   ^ This line of code isn't compatible with matlab 2024a, had to change it!
+figure()
+plot_states(tarr,state_perturbed_ode-full_state,xunits,wrap_indices_x)
+sgtitle('States vs. Time, ODE Minus Linearization','FontSize',14, 'Interpreter','latex')
+
 
 % plot measurements from ode minus measurements, linearized
-fig5 = figure('units','normalized','outerposition',[0 1 .5 1]);
-plot_states(tarr,y_ode-y_linearized,['\delta',yunits],[1,3])
-sgtitle('ODE Measurements minus Linearization Measurements')
+%fig7 = figure('units','normalized','outerposition',[0 1 .5 1]);
+%   ^ This line of code isn't compatible with matlab 2024a, had to change it!
+figure()
+plot_states(tarr,y_ode-y_linearized,dyunits,[1,3])
+sgtitle('ODE Measurements Minus Linearization Measurements','FontSize',14, 'Interpreter','latex')
+
 
 %% Part II, Problem 4. 
 
@@ -179,6 +198,9 @@ for i=1:length(tarr)
     end
 end
 %% Functions
+
+% -------- ODE45 ----------
+
 function yd = NL_ode(t,y,vg,phi,va,wa,w_tild_g,w_tild_a,L)
 % full ODE for the dynamical system to be used in ODE 45
     xi_g=y(1);
@@ -208,8 +230,10 @@ function yd = NL_ode(t,y,vg,phi,va,wa,w_tild_g,w_tild_a,L)
     yd = [xi_g_dot; etag_dot; theta_g_dot; xi_a_dot; etaa_dot; theta_a_dot];
 end
 
-function [Abar,Bbar,Cbar,Dbar,F,G,H,M] = get_dynamics_matricies(xnom,unom,dt,L)
-% get matricies for the dynamical system
+% --------- CT and DT MATRICES --------
+
+function [Abar,Bbar,Cbar,Dbar,F,G,H,M] = get_dynamics_matrices(xnom,unom,dt,L)
+% get matrices for the dynamical system
 % xnom = xnom(t) where xnom is size 6x[length of time array]
 % unom = unom(t) where unom is size 4x[length of time array]
 % matrixes are size rows x cols x [length of time array]
@@ -220,7 +244,7 @@ G = nan(6,4,num_times);
 H = nan(5,6,num_times);
 M = nan(5,4,num_times);
 
-% ------- Jacobians -------
+    % ------- Jacobians -------
 for ti = 1:num_times
     x1 = xnom(1,ti);
     x2 = xnom(2,ti);
@@ -272,18 +296,20 @@ end
 
 end
 
-function plot_states(tarr,state,ylabels,wrap_indicies)
+% ------ PLOTTING FUNCTION -------
+
+function plot_states(tarr,state,ylabels,wrap_indices)
 % plot the states using subplots
-    for iw = 1:length(wrap_indicies)
-        state(wrap_indicies(iw),:)= mod(state(wrap_indicies(iw),:)+pi,2*pi)-pi;
-       
+    for iw = 1:length(wrap_indices)
+        state(wrap_indices(iw),:)= mod(state(wrap_indices(iw),:)+pi,2*pi)-pi;  
     end
 
     for i=1:size(state,1)
         subplot(size(state,1),1,i)
-        plot(tarr,state(i,:))
-        ylabel(ylabels{i})
-        xlabel('Time (s)')
+        plot(tarr,state(i,:),'Color','blue','LineWidth',1.5)
+        ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
+        xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
+        grid on
     end
 
 end
