@@ -31,17 +31,25 @@ for ik = 1:ktot % for each time
     epsbar_xk(ik) = 1/N*sum(eps_xk);
 end
 
+% find bounds for NEES test
 r1 = chi2inv(alpha/2,N*nstates)/N;
 r2 = chi2inv(1-alpha/2,N*nstates)/N;
+
 inside_vals = sum(epsbar_xk>r1 & epsbar_xk<r2); % number of vals inside interval [r1,r2]
 predicted_inside_vals = (1-alpha)*100*ktot; % number of vals we SHOULD see inside interval
+
+% test to see if KF filter passes NEES test
+% may need to make this first "if" statement more lenient 
 if (inside_vals<ceil(predicted_inside_vals) && inside_vals>floor(predicted_inside_vals) )
-    did_pass = 1;
+    % about (1-alpha)*100% of epsilon bar values are inside expected bounds
+    did_pass = 1; 
     too_many_inside = 0;
 elseif inside_vals>ceil(predicted_inside_vals)
+    % > (1-alpha)*100% of epsilon bar values are inside expected bounds
     did_pass = 1; 
     too_many_inside = 1;
 else
+    % < (1-alpha)*100% of epsilon bar values are inside expected bounds
     did_pass = 0;
     too_many_inside = 0;
 end
