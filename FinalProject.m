@@ -185,9 +185,9 @@ ydata = coopData.ydata;
 % initialize stuff 
 P0 = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
 MC_num = 100; % number of monte carlo simulations
-NEES = zeros(MC_num,length(tarr));
-NIS = zeros(MC_num,length(tarr));
-dxhat_all = zeros(6,length(tarr),MC_num);
+%NEES = zeros(MC_num,length(tarr));
+%NIS = zeros(MC_num,length(tarr));
+dxhat_all = zeros(6,length(tarr),MC_num); % dx hat plus
 noisy_y = zeros(5, length(tarr),MC_num);
 
 
@@ -206,7 +206,7 @@ for m = 1:MC_num % for each MC iteration
     % initialize KF
     dxhat0 = deltx0; % initial PERTURBATION state estimate
     P = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
-    dxhat = zeros(6,length(tarr));
+    dxhat = zeros(6,length(tarr)); 
     dxhat(:,1) = xhat0;
     du0 = [0;0;0;0;0;0]; % ADD REAL NUMBERS TO THIS LATER
     du = zeros(6,length(tarr));
@@ -223,6 +223,22 @@ for m = 1:MC_num % for each MC iteration
     dxhat_all(:,:,m) = dxhat;
 end
 
+%% NEES test
+xhat_plus = repmat(xnom,1,1,MC_num) + dxhat;
+alpha = 0.05;
+[did_pass,too_many_inside] = NEES(xtruth, xhat_plus,Pk_plus,alpha);
+% Inputs:
+% - total state xhat^plus(k) = xnom(k) + dxhat^plus(k)
+% - xtruth, xhat_plus = n x length of time array x N
+% - N = number MC simulation runs
+% - Pk_plus = n x n x length of time array x N
+% - alpha = scalar = significance level
+% 
+% Outputs:
+% - did_pass = epsilon_xk bar inside [r1,r2] for at least around
+%       (1-alpha)*100% of time (this is good)
+% - too_many_inside = = epsilon_xk bar inside [r1,r2] more than
+%       (1-alpha)*100% of time (this is less good)
 
 %% validation
 for i=1:length(tarr)
