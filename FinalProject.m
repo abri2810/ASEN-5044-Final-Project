@@ -188,20 +188,49 @@ MC_num = 100; % number of monte carlo simulations
 %NEES = zeros(MC_num,length(tarr));
 %NIS = zeros(MC_num,length(tarr));
 dxhat_all = zeros(6,length(tarr),MC_num); % dx hat plus
-noisy_y = zeros(5, length(tarr),MC_num);
 
-
+dx_truth = zeros(6,length(tarr),MC_num); % simulated truth perturbation
+x_truth = zeros(6,length(tarr),MC_num); % simulated truth state
+noisy_dy = zeros(5, length(tarr),MC_num); % simulated measurement perturbations
+noisy_y = zeros(5, length(tarr),MC_num); % ynom + noisy_dy
 % ----- super iffy on the code below ----------
 
 for m = 1:MC_num % for each MC iteration
     % simulate noisy measurement for each iteration
-        % create random measurement noise
-        v = mvnrnd([0;0;0;0;0],R,length(tarr));
-        % simulate measurement 
-        noisy_y(:,:,m) = ydata + v' ;
-            % this gives a new noisy measurement for each monte carlo
-            % iteration. this will be used as input to the KF to produce
-            % state estimates and predicted measurements
+    %% Sarah's edits here, feel free to delete if this seems like the wrong method!
+    % adapted from "Lec26_1Drobotstatefilter"
+    xk_truehist = zeros(2,length(tvec));
+    ykhist = zeros(1,length(tvec));
+    xk_true0 = mvnrnd(xnom_t0,eye(6))'; %sample initial state %not sure if this is right!!
+    dx_truth(:,1) = xk_true0-xnom_t0;
+    for k=1:length(tarr)
+      
+        %%simulate process noise and add to actual state
+        wk = mvnrnd(zeros(1,6),Q)';
+        F_t = squeeze(F(:,:,k));
+        G_t = squeeze(G(:,:,k));
+
+        dx_truth(:,k) = F_t*dx_truth(:,k-1) + G_t*du(:,k-1) + wk; 
+        
+        %%simulate measurement noise and add to sensor data
+        vk = mvnrnd(zeros(1,size(ydata,1)),R)';
+        H_t = squeeze(H(:,:,k));
+        M_t = squeeze(M(:,:,k));
+        noisy_dy(:,k,m) = H_t*dx_truth(:,k) + M_t*du(:,k) + vk; 
+        
+     end
+     x_truth(:,:,m) = dx_truth + xnom;
+     noisy_y(:,:,m) = ynom + noisy_dy(:,:,m);
+
+        % % create random measurement noise
+        % v = mvnrnd([0;0;0;0;0],R,length(tarr));
+        % % simulate measurement 
+        % noisy_y(:,:,m) = ydata + v' ;
+            % % this gives a new noisy measurement for each monte carlo
+            % % iteration. this will be used as input to the KF to produce
+            % % state estimates and predicted measurements
+
+%%
 
     % initialize KF
     dxhat0 = deltx0; % initial PERTURBATION state estimate
@@ -226,7 +255,7 @@ end
 %% NEES test
 xhat_plus = repmat(xnom,1,1,MC_num) + dxhat;
 alpha = 0.05;
-[did_pass,too_many_inside] = NEES(xtruth, xhat_plus,Pk_plus,alpha);
+[did_pass,too_many_inside] = NEES(x_truth, xhat_plus,Pk_plus,alpha);
 % Inputs:
 % - total state xhat^plus(k) = xnom(k) + dxhat^plus(k)
 % - xtruth, xhat_plus = n x length of time array x N
