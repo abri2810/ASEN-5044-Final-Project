@@ -1,43 +1,43 @@
-function [did_pass,too_many_inside,fig_handle] = NEES(xtruth, xhat_plus,Pk_plus,alpha,show_plot)
+ function [did_pass,too_many_inside,fig_handle] = NIS(ytruth, yhat,Sk,alpha,show_plot)
 % Inputs:
-% - total state xhat^plus(k) = xnom(k) + dxhat^plus(k)
-% - xtruth, xhat_plus = n x length of time array x N
+% - total measurement state yhat(k) = ynom(k) + dyhat(k)
+% - ytruth, yhat_plus = p x length of time array x N
 % - N = number MC simulation runs
-% - Pk_plus = n x n x length of time array x N
+% - Sk = n x n x length of time array x N
 % - alpha = scalar = significance level
 % - show_plot = optional, if true then plot result
 % 
 % Outputs:
-% - did_pass = epsilon_xk bar inside [r1,r2] for around
+% - did_pass = epsilon_yk bar inside [r1,r2] for at least around
 %       (1-alpha)*100% of time (this is good)
-% - too_many_inside = = epsilon_xk bar inside [r1,r2] more than
+% - too_many_inside = = epsilon_yk bar inside [r1,r2] more than
 %       (1-alpha)*100% of time (this is less good)
 % - fig_handle = handle of figure if show_plot is true
 
-nstates = size(xhat_plus,1); % n = number of states
-ktot= size(xhat_plus,2); % length of time array
-N = size(xhat_plus,3); % number of MC sims
+p = size(yhat,1); % n = number of states
+ktot= size(yhat,2); % length of time array
+N = size(yhat,3); % number of MC sims
 
 % errors
-e_xk = xtruth-xhat_plus;
+e_yk = ytruth-yhat;
 
 % calculate mean normalized estimation error squared
-epsbar_xk = nan(1,ktot);
+epsbar_yk = nan(1,ktot);
 for ik = 1:ktot % for each time
-    eps_xk = nan(nstates, N);
+    eps_yk = nan(p, N);
     for iMC = 1:N
-        this_e_xk = squeeze( e_xk(:,ik,iMC) );
-        thisPk_plus = squeeze( Pk_plus(:,:,ik,iMC) );
-        eps_xk(iMC) = this_e_xk'*inv(thisPk_plus)*this_e_xk;
+        this_e_yk = squeeze( e_yk(:,ik,iMC) );
+        thisSk = squeeze( Sk(:,:,ik,iMC) );
+        eps_yk(iMC) = this_e_yk'*inv(thisSk)*this_e_yk;
     end
-    epsbar_xk(ik) = 1/N*sum(eps_xk);
+    epsbar_yk(ik) = 1/N*sum(eps_yk);
 end
 
 % find bounds for NEES test
-r1 = chi2inv(alpha/2,N*nstates)/N;
-r2 = chi2inv(1-alpha/2,N*nstates)/N;
+r1 = chi2inv(alpha/2,N*p)/N;
+r2 = chi2inv(1-alpha/2,N*p)/N;
 
-inside_vals = sum(epsbar_xk>r1 & epsbar_xk<r2); % number of vals inside interval [r1,r2]
+inside_vals = sum(epsbar_yk>r1 & epsbar_yk<r2); % number of vals inside interval [r1,r2]
 predicted_inside_vals = (1-alpha)*100*ktot; % number of vals we SHOULD see inside interval
 
 % test to see if KF filter passes NEES test
@@ -60,10 +60,10 @@ if not(exist('show_plot','var')) show_plot = 0; end
 
 if show_plot
     fig_handle = figure();
-    title('NEES Estimation Results')
-    ylabel('NEES stat, \bar\epsilon_k')
+    title('NIS Estimation Results')
+    ylabel('NIS stat, \bar\epsilon_k')
     xlabel('time step, k')
-    scatter(1:ktot, epsbar_xk,Color='b',DisplayName='NEES val')
+    scatter(1:ktot, epsbar_yk,Color='b',DisplayName='NIS val')
     hold on
     plot([0, ktot],[r1 r1],'--',Color='r',DisplayName='r_1 bound')
     plot([0, ktot],[r2 r2],'--',Color='r',DisplayName='r_2 bound')

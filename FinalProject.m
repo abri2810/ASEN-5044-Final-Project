@@ -200,6 +200,10 @@ for m = 1:MC_num % for each MC iteration
     % simulate noisy measurement for each iteration
     %% Sarah's edits here, feel free to delete if this seems like the wrong method!
     % adapted from "Lec26_1Drobotstatefilter"
+
+    % First, simulate truth state as "truth" for the NEES  test.
+    % Also simulate corresponding measurements to use as "truth" for NIS 
+    % test and as input to KF filter.
     xk_truehist = zeros(2,length(tvec));
     ykhist = zeros(1,length(tvec));
     xk_true0 = mvnrnd(xnom_t0,eye(6))'; %sample initial state %not sure if this is right!!
@@ -232,7 +236,7 @@ for m = 1:MC_num % for each MC iteration
             % % state estimates and predicted measurements
 
 %%
-
+    % Next, use the simulated "truth" measurements to use in KF
     % initialize KF
     dxhat0 = deltx0; % initial PERTURBATION state estimate
     P = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
@@ -255,8 +259,8 @@ end
 
 %% NEES test
 xhat_plus = repmat(xnom,1,1,MC_num) + dxhat_all;
-alpha = 0.05;
-[did_pass,too_many_inside,fig_handle] = NEES(x_truth, xhat_plus,Pk_plus,alpha,1);
+alpha_NEES = 0.05;
+[did_pass_NEES,too_many_inside_NEES,fig_handle_NEES] = NEES(x_truth, xhat_plus,Pk_plus,alpha_NEES,1);
 % Inputs:
 % - total state xhat^plus(k) = xnom(k) + dxhat^plus(k)
 % - xtruth, xhat_plus = n x length of time array x N
@@ -264,6 +268,18 @@ alpha = 0.05;
 % - Pk_plus = n x n x length of time array x N
 % - alpha = scalar = significance level
 % - show_plot = optional, if true then plot result
+
+%% NIS test
+alpha_NIS = alpha_NEES;
+[did_pass_NIS,too_many_inside_NIS,fig_handle_NIS] = NIS(noisy_y, yhat,Sk,alpha_NIS,1);
+% Inputs:
+% - total measurement state yhat(k) = ynom(k) + dyhat(k)
+% - ytruth, yhat_plus = p x length of time array x N
+% - N = number MC simulation runs
+% - Sk = n x n x length of time array x N
+% - alpha = scalar = significance level
+% - show_plot = optional, if true then plot result
+
 
 %% validation
 for i=1:length(tarr)
