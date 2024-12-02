@@ -187,6 +187,7 @@ P0 = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE I
 MC_num = 100; % number of monte carlo simulations
 %NEES = zeros(MC_num,length(tarr));
 %NIS = zeros(MC_num,length(tarr));
+Pk_plus_all = zeros(6,6,length(tarr),MC_num); % Pk plus
 dxhat_all = zeros(6,length(tarr),MC_num); % dx hat plus
 
 dx_truth = zeros(6,length(tarr),MC_num); % simulated truth perturbation
@@ -253,21 +254,16 @@ for m = 1:MC_num % for each MC iteration
 end
 
 %% NEES test
-xhat_plus = repmat(xnom,1,1,MC_num) + dxhat;
+xhat_plus = repmat(xnom,1,1,MC_num) + dxhat_all;
 alpha = 0.05;
-[did_pass,too_many_inside] = NEES(x_truth, xhat_plus,Pk_plus,alpha);
+[did_pass,too_many_inside,fig_handle] = NEES(x_truth, xhat_plus,Pk_plus,alpha,1);
 % Inputs:
 % - total state xhat^plus(k) = xnom(k) + dxhat^plus(k)
 % - xtruth, xhat_plus = n x length of time array x N
 % - N = number MC simulation runs
 % - Pk_plus = n x n x length of time array x N
 % - alpha = scalar = significance level
-% 
-% Outputs:
-% - did_pass = epsilon_xk bar inside [r1,r2] for at least around
-%       (1-alpha)*100% of time (this is good)
-% - too_many_inside = = epsilon_xk bar inside [r1,r2] more than
-%       (1-alpha)*100% of time (this is less good)
+% - show_plot = optional, if true then plot result
 
 %% validation
 for i=1:length(tarr)

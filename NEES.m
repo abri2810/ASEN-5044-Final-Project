@@ -1,16 +1,18 @@
-function [did_pass,too_many_inside] = NEES(xtruth, xhat_plus,Pk_plus,alpha)
+function [did_pass,too_many_inside,fig_handle] = NEES(xtruth, xhat_plus,Pk_plus,alpha,show_plot)
 % Inputs:
 % - total state xhat^plus(k) = xnom(k) + dxhat^plus(k)
 % - xtruth, xhat_plus = n x length of time array x N
 % - N = number MC simulation runs
 % - Pk_plus = n x n x length of time array x N
 % - alpha = scalar = significance level
+% - show_plot = optional, if true then plot result
 % 
 % Outputs:
 % - did_pass = epsilon_xk bar inside [r1,r2] for at least around
 %       (1-alpha)*100% of time (this is good)
 % - too_many_inside = = epsilon_xk bar inside [r1,r2] more than
 %       (1-alpha)*100% of time (this is less good)
+% - fig_handle = handle of figure if show_plot is true
 
 nstates = size(xhat_plus,1); % n = number of states
 ktot= size(xhat_plus,2); % length of time array
@@ -54,4 +56,18 @@ else
     too_many_inside = 0;
 end
 
+if not(exist('show_plot','var')) show_plot = 0; end
+
+if show_plot
+    fig_handle = figure();
+    title('NEES Estimation Results')
+    ylabel('NEES stat, \bar\epsilon_k')
+    xlabel('time step, k')
+    scatter(1:ktot, epsbar_xk,Color='b',DisplayName='NEES val')
+    hold on
+    plot([0, ktot],[r1 r1],'--',Color='r',DisplayName='r_1 bound')
+    plot([0, ktot],[r2 r2],'--',Color='r',DisplayName='r_2 bound')
+    hold off
+    legend
+end
 
