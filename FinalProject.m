@@ -190,7 +190,7 @@ MC_num = 100; % number of monte carlo simulations
 Pk_plus_all = zeros(6,6,length(tarr),MC_num); % Pk plus
 dxhat_all = zeros(6,length(tarr),MC_num); % dx hat plus
 
-dx_truth = zeros(6,length(tarr),MC_num); % simulated truth perturbation
+dx_truth = zeros(6,length(tarr)); % simulated truth perturbation
 x_truth = zeros(6,length(tarr),MC_num); % simulated truth state
 noisy_dy = zeros(5, length(tarr),MC_num); % simulated measurement perturbations
 noisy_y = zeros(5, length(tarr),MC_num); % ynom + noisy_dy
@@ -204,27 +204,25 @@ for m = 1:MC_num % for each MC iteration
     % First, simulate truth state as "truth" for the NEES  test.
     % Also simulate corresponding measurements to use as "truth" for NIS 
     % test and as input to KF filter.
-    xk_truehist = zeros(2,length(tvec));
-    ykhist = zeros(1,length(tvec));
-    xk_true0 = mvnrnd(xnom_t0,eye(6))'; %sample initial state %not sure if this is right!!
-    dx_truth(:,1) = xk_true0-xnom_t0;
-    for k=1:length(tarr)
+    xk_true0 = mvnrnd(xnom_t0,P0)'; %sample initial state %not sure if this is right!!
+    dx_truth(:,1,m) = xk_true0-xnom_t0;
+    for k=2:length(tarr)
       
         %%simulate process noise and add to actual state
         wk = mvnrnd(zeros(1,6),Q)';
         F_t = squeeze(F(:,:,k));
         G_t = squeeze(G(:,:,k));
 
-        dx_truth(:,k) = F_t*dx_truth(:,k-1) + G_t*du(:,k-1) + wk; 
+        dx_truth(:,k,m) = F_t*dx_truth(:,k-1,m) + G_t*du(:,k-1) + wk; 
         
         %%simulate measurement noise and add to sensor data
         vk = mvnrnd(zeros(1,size(ydata,1)),R)';
         H_t = squeeze(H(:,:,k));
         M_t = squeeze(M(:,:,k));
-        noisy_dy(:,k,m) = H_t*dx_truth(:,k) + M_t*du(:,k) + vk; 
+        noisy_dy(:,k,m) = H_t*dx_truth(:,k,m) + M_t*du(:,k) + vk; 
         
      end
-     x_truth(:,:,m) = dx_truth + xnom;
+     x_truth(:,:,m) = xnom + dx_truth(:,:,m);
      noisy_y(:,:,m) = ynom + noisy_dy(:,:,m);
 
         % % create random measurement noise
