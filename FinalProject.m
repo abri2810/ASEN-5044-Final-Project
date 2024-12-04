@@ -165,7 +165,7 @@ sgtitle('ODE Measurements Minus Linearization Measurements','FontSize',14, 'Inte
 
 % load the data, R, and Q matrices 
 coopData = load('cooplocalization_finalproj_KFdata.mat');
-Q = coopData.Qtrue;
+Q = 5*coopData.Qtrue;
 R = coopData.Rtrue;
 ydata = coopData.ydata;
 
@@ -271,7 +271,7 @@ for m = 1:MC_num % for each MC iteration
         % results of the state & covariance
         dxhat(:,k) = dxhat_plus;
         Pk(:,:,k) = Pk_plus;
-        dyhat(:,k) = dy;
+        dyhat(:,k) = Htild_k*dxhat_minus;
         Sk(:,:,k) = Skval;
         innovation(:,k) = innovation_k;
 
@@ -279,8 +279,8 @@ for m = 1:MC_num % for each MC iteration
     dxhat_all(:,:,m) = dxhat;
     Pk_plus_all(:,:,:,m) = Pk;
     dy_KF(:,:,m) = dyhat;
-    xhat_all(:,:,m) = dxhat + x_truth_sim(:,:,m);
-    y_all(:,:,m) = dyhat + y_truth_sim(:,:,m);
+    xhat_all(:,:,m) = dxhat + xnom;
+    y_all(:,:,m) = dyhat + ynom;
     Sk_all(:,:,:,m) = Sk;
     innovation_all(:,:,m) = innovation;
 end
