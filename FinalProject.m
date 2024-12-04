@@ -165,7 +165,7 @@ sgtitle('ODE Measurements Minus Linearization Measurements','FontSize',14, 'Inte
 
 % load the data, R, and Q matrices 
 coopData = load('cooplocalization_finalproj_KFdata.mat');
-Q = 5*coopData.Qtrue;
+Q = coopData.Qtrue;
 R = coopData.Rtrue;
 ydata = coopData.ydata;
 
