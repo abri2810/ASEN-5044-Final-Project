@@ -24,13 +24,13 @@ e_xk = xtruth-xhat_plus;
 % calculate mean normalized estimation error squared
 epsbar_xk = nan(1,ktot);
 for ik = 1:ktot % for each time
-    eps_xk = nan(nstates, N);
+    eps_xk = nan(1,N);
     for iMC = 1:N
         this_e_xk = squeeze( e_xk(:,ik,iMC) );
         thisPk_plus = squeeze( Pk_plus(:,:,ik,iMC) );
-        eps_xk(iMC) = this_e_xk'*inv(thisPk_plus)*this_e_xk;
+        eps_xk(iMC) = this_e_xk'*inv(thisPk_plus)*this_e_xk;             
     end
-    epsbar_xk(ik) = 1/N*sum(eps_xk);
+    epsbar_xk(ik) = mean(eps_xk);
 end
 
 % find bounds for NEES test
@@ -60,14 +60,14 @@ if not(exist('show_plot','var')) show_plot = 0; end
 
 if show_plot
     fig_handle = figure();
-    title('NEES Estimation Results')
-    ylabel('NEES stat, \bar\epsilon_k')
-    xlabel('time step, k')
     scatter(1:ktot, epsbar_xk,Color='b',DisplayName='NEES val')
     hold on
     plot([0, ktot],[r1 r1],'--',Color='r',DisplayName='r_1 bound')
     plot([0, ktot],[r2 r2],'--',Color='r',DisplayName='r_2 bound')
     hold off
+    title('NEES Estimation Results')
+    ylabel('NEES stat, $\bar{\epsilon_k}$',Interpreter='latex')
+    xlabel('time step, k')
     legend
 end
 

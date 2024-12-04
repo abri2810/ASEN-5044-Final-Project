@@ -175,6 +175,7 @@ MC_num = 100; % number of monte carlo simulations
     % 6x6, for each timestep, for each MC
 P0 = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
 Pk_plus_all = zeros(6,6,length(tarr),MC_num); % Pk plus
+Sk_plus_all = zeros(5,5,length(tarr),MC_num); % Pk plus
 
 % initialize state matrix
     % 6x1, for each timestep, for each MC
@@ -251,6 +252,9 @@ for m = 1:MC_num % for each MC iteration
         % I think we don't need to?
         
         % gain K
+        Skval = Htild_k*Pk_minus*Htild_k' + R;
+        Skval = 0.5*(Skval + Skval');
+
         K = Pk_minus*Htild_k' * inv(Htild_k*Pk_minus*Htild_k' + R);
 
         % correction step
@@ -260,12 +264,16 @@ for m = 1:MC_num % for each MC iteration
         predicted_y = ynom(:,k);
         %dy = ydata(:,k) - y_truth_sim(:,k,m);
         dy= pretend_y_data-predicted_y;
-        dxhat_plus = dxhat_minus + K*(dy-Htild_k*dxhat_minus);
+        innovation_k = dy-Htild_k*dxhat_minus;
+
+        dxhat_plus = dxhat_minus + K*(innovation_k);
 
         % results of the state & covariance
         dxhat(:,k) = dxhat_plus;
         Pk(:,:,k) = Pk_plus;
         dyhat(:,k) = dy;
+        Sk(:,:,k) = Skval;
+        innovation(:,k) = innovation_k;
 
     end
     dxhat_all(:,:,m) = dxhat;
@@ -273,6 +281,8 @@ for m = 1:MC_num % for each MC iteration
     dy_KF(:,:,m) = dyhat;
     xhat_all(:,:,m) = dxhat + x_truth_sim(:,:,m);
     y_all(:,:,m) = dyhat + y_truth_sim(:,:,m);
+    Sk_all(:,:,:,m) = Sk;
+    innovation_all(:,:,m) = innovation;
 end
 
 %% Plots for Problem 4a
@@ -293,7 +303,7 @@ sgtitle('Simulated Measurements, Linearized KF','FontSize',14, 'Interpreter','la
 %% NEES test
 xhat_plus = repmat(xnom,1,1,MC_num) + dxhat_all;
 alpha_NEES = 0.05;
-[did_pass_NEES,too_many_inside_NEES,fig_handle_NEES] = NEES(x_truth_sim, xhat_plus,Pk_plus,alpha_NEES,1);
+[did_pass_NEES,too_many_inside_NEES,fig_handle_NEES] = NEES(x_truth_sim, xhat_plus,Pk_plus_all,alpha_NEES,1);
 % Inputs:
 % - total state xhat^plus(k) = xnom(k) + dxhat^plus(k)
 % - xtruth, xhat_plus = n x length of time array x N
@@ -304,7 +314,7 @@ alpha_NEES = 0.05;
 
 %% NIS test
 alpha_NIS = alpha_NEES;
-[did_pass_NIS,too_many_inside_NIS,fig_handle_NIS] = NIS(y_truth_sim, yhat,Sk,alpha_NIS,1);
+[did_pass_NIS,too_many_inside_NIS,fig_handle_NIS] = NIS(innovation_all,Sk_all,alpha_NIS,1);
 % Inputs:
 % - total measurement state yhat(k) = ynom(k) + dyhat(k)
 % - ytruth, yhat_plus = p x length of time array x N

@@ -1,4 +1,4 @@
- function [did_pass,too_many_inside,fig_handle] = NIS(ytruth, yhat,Sk,alpha,show_plot)
+function [did_pass,too_many_inside,fig_handle] = NIS(innovation_vec,Sk,alpha,show_plot)
 % Inputs:
 % - total measurement state yhat(k) = ynom(k) + dyhat(k)
 % - ytruth, yhat_plus = p x length of time array x N
@@ -14,17 +14,17 @@
 %       (1-alpha)*100% of time (this is less good)
 % - fig_handle = handle of figure if show_plot is true
 
-p = size(yhat,1); % n = number of states
-ktot= size(yhat,2); % length of time array
-N = size(yhat,3); % number of MC sims
+p = size(innovation_vec,1); % n = number of states
+ktot= size(innovation_vec,2); % length of time array
+N = size(innovation_vec,3); % number of MC sims
 
 % errors
-e_yk = ytruth-yhat;
+e_yk = innovation_vec;
 
 % calculate mean normalized estimation error squared
 epsbar_yk = nan(1,ktot);
 for ik = 1:ktot % for each time
-    eps_yk = nan(p, N);
+    eps_yk = nan(1, N);
     for iMC = 1:N
         this_e_yk = squeeze( e_yk(:,ik,iMC) );
         thisSk = squeeze( Sk(:,:,ik,iMC) );
@@ -60,14 +60,14 @@ if not(exist('show_plot','var')) show_plot = 0; end
 
 if show_plot
     fig_handle = figure();
-    title('NIS Estimation Results')
-    ylabel('NIS stat, \bar\epsilon_k')
-    xlabel('time step, k')
     scatter(1:ktot, epsbar_yk,Color='b',DisplayName='NIS val')
     hold on
     plot([0, ktot],[r1 r1],'--',Color='r',DisplayName='r_1 bound')
     plot([0, ktot],[r2 r2],'--',Color='r',DisplayName='r_2 bound')
     hold off
+    title('NIS Estimation Results')
+    ylabel('NIS stat, $\bar{\epsilon_k}$',Interpreter='latex')
+    xlabel('time step, k')
     legend
 end
 
