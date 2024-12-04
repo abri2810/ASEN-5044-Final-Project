@@ -66,15 +66,6 @@ unom = repmat(unom_t0,1,length(tarr));
 
 [Abar,Bbar,Cbar,Dbar,F,G,H,M] = get_dynamics_matrices(xnom,unom,dt,L);
 
-% Observability
-%ob = [H; H*F; H*F^2; H*F^3; H*F^4; H*F^5];
-%rank(ob);
-% The observability matrix has full column rank, so it is observable
-
-% Stability
-%eig(F);
-% The system is marginally stable because all eigenvalues lie on the unit
-% circle.
 
 %% Part I, Problem 3.
 
@@ -141,14 +132,12 @@ figure()
 plot_states(tarr,state_perturbed_ode,xunits,wrap_indices_x)
 sgtitle('States vs. Time, Full Nonlinear Dynamics Simulation','FontSize',14, 'Interpreter','latex')
 
-
 % plot measurements, linearized
 %fig4 = figure('units','normalized','outerposition',[0 1 .5 1]);
 %   ^ This line of code isn't compatible with matlab 2024a, had to change it!
 figure()
 plot_states(tarr,y_linearized,yunits,[1,3])
 sgtitle('Linearized Approximate Dynamics Measurements','FontSize',14, 'Interpreter','latex')
-
 
 % plot measurements from ode
 %fig5 = figure('units','normalized','outerposition',[0 1 .5 1]);
@@ -157,14 +146,12 @@ figure()
 plot_states(tarr,y_ode,yunits,[1,3])
 sgtitle('Full Nonlinear Measurements','FontSize',14, 'Interpreter','latex')
 
-
 % Full Nonlinear Dynamics Simulation minus full linearized state
 %fig6 = figure('units','normalized','outerposition',[0 1 .5 1]);
 %   ^ This line of code isn't compatible with matlab 2024a, had to change it!
 figure()
 plot_states(tarr,state_perturbed_ode-full_state,xunits,wrap_indices_x)
 sgtitle('States vs. Time, ODE Minus Linearization','FontSize',14, 'Interpreter','latex')
-
 
 % plot measurements from ode minus measurements, linearized
 %fig7 = figure('units','normalized','outerposition',[0 1 .5 1]);
@@ -182,30 +169,34 @@ Q = coopData.Qtrue;
 R = coopData.Rtrue;
 ydata = coopData.ydata;
 
-% initialize stuff 
-P0 = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
 MC_num = 100; % number of monte carlo simulations
-%NEES = zeros(MC_num,length(tarr));
-%NIS = zeros(MC_num,length(tarr));
-Pk_plus_all = zeros(6,6,length(tarr),MC_num); % Pk plus
-dxhat_all = zeros(6,length(tarr),MC_num); % dx hat plus
 
-dx_truth = zeros(6,length(tarr)); % simulated truth perturbation
-x_truth = zeros(6,length(tarr),MC_num); % simulated truth state
-noisy_dy = zeros(5, length(tarr),MC_num); % simulated measurement perturbations
-noisy_y = zeros(5, length(tarr),MC_num); % ynom + noisy_dy
-% ----- super iffy on the code below ----------
+% initialize covariance matrix 
+    % 6x6, for each timestep, for each MC
+P0 = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
+Pk_plus_all = zeros(6,6,length(tarr),MC_num); % Pk plus
+
+% initialize state matrix
+    % 6x1, for each timestep, for each MC
+dxhat_all = zeros(6,length(tarr),MC_num); % dx hat plus, given by KF
+dx_truth_sim = zeros(6,length(tarr),MC_num); % simulated noisy truth perturbation
+x_truth_sim = zeros(6,length(tarr),MC_num); % simulated truth state
+xhat_all = zeros(6,length(tarr),MC_num);
+
+% initialize measurements matrix
+    % 5x1, for each timestep, for each MC
+dy_KF = zeros(5, length(tarr),MC_num); % dy given by KF
+dy_truth_sim = zeros(5, length(tarr),MC_num); % simulated measurement perturbations
+y_truth_sim = zeros(5, length(tarr),MC_num); % ynom + noisy_dy
+y_all = zeros(5, length(tarr),MC_num); % y given by KF
 
 for m = 1:MC_num % for each MC iteration
-    % simulate noisy measurement for each iteration
-    %% Sarah's edits here, feel free to delete if this seems like the wrong method!
-    % adapted from "Lec26_1Drobotstatefilter"
-
+    % ----------------
     % First, simulate truth state as "truth" for the NEES  test.
     % Also simulate corresponding measurements to use as "truth" for NIS 
     % test and as input to KF filter.
-    xk_true0 = mvnrnd(xnom_t0,P0)'; %sample initial state %not sure if this is right!!
-    dx_truth(:,1,m) = xk_true0-xnom_t0;
+    xtrue0 = mvnrnd(xnom_t0,P0)'; % sample initial state % not sure if this is right!!
+    dx_truth_sim(:,1,m) = xtrue0-xnom_t0;
     for k=2:length(tarr)
       
         %%simulate process noise and add to actual state
@@ -213,52 +204,92 @@ for m = 1:MC_num % for each MC iteration
         F_t = squeeze(F(:,:,k));
         G_t = squeeze(G(:,:,k));
 
-        dx_truth(:,k,m) = F_t*dx_truth(:,k-1,m) + G_t*du(:,k-1) + wk; 
+        dx_truth_sim(:,k,m) = F_t*dx_truth_sim(:,k-1,m) + G_t*du(:,k-1) + wk; 
         
         %%simulate measurement noise and add to sensor data
         vk = mvnrnd(zeros(1,size(ydata,1)),R)';
         H_t = squeeze(H(:,:,k));
         M_t = squeeze(M(:,:,k));
-        noisy_dy(:,k,m) = H_t*dx_truth(:,k,m) + M_t*du(:,k) + vk; 
-        
-     end
-     x_truth(:,:,m) = xnom + dx_truth(:,:,m);
-     noisy_y(:,:,m) = ynom + noisy_dy(:,:,m);
+        dy_truth_sim(:,k,m) = H_t*dx_truth_sim(:,k,m) + M_t*du(:,k) + vk; 
+    end
+     % add simulated dx and dy to the nominal states
+     x_truth_sim(:,:,m) = xnom + dx_truth_sim(:,:,m);
+     y_truth_sim(:,:,m) = ynom + dy_truth_sim(:,:,m);
+    
+    % ----------------
+    % Next, use the simulated "truth" measurements as inputs to KF
 
-        % % create random measurement noise
-        % v = mvnrnd([0;0;0;0;0],R,length(tarr));
-        % % simulate measurement 
-        % noisy_y(:,:,m) = ydata + v' ;
-            % % this gives a new noisy measurement for each monte carlo
-            % % iteration. this will be used as input to the KF to produce
-            % % state estimates and predicted measurements
-
-%%
-    % Next, use the simulated "truth" measurements to use in KF
     % initialize KF
-    dxhat0 = deltx0; % initial PERTURBATION state estimate
-    P = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
+    dxhat0 = deltx0; % initial perturbation state estimate
     dxhat = zeros(6,length(tarr)); 
-    dxhat(:,1) = xhat0;
-    du0 = [0;0;0;0;0;0]; % ADD REAL NUMBERS TO THIS LATER
-    du = zeros(6,length(tarr));
+    dxhat(:,1) = dxhat0;
+
+    dyhat = zeros(5,length(tarr));
+
+    du0 = [0;0;0;0]; % fill in with real numbers later!!
+    du = zeros(4,length(tarr));
+    du(:,1) = du0;
+
+    P0 = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
+    Pk = zeros(6,6,length(tarr));
+    Pk(:,:,1) = P0;
 
     for k = 2:length(tarr) % for each timestep k 
-        F_t = F(:,:,k-1); % time-varying F matrix
-        H_t = H(:,:,k-1); % time-varying H matrix
-        G_t = G(:,:,k-1); % time varying G matrix
+        % must re-calculate F, G, H, Omega at each timestep! These are not
+        % the same as the F, G, H Jacobians calculated in part 1. 
+        Ftild_k = eye(6) + dt*Abar(:,:,k-1);
+        Htild_k = H(:,:,k); % H tilde = H bar = C bar
+        Gtild_k = dt*Bbar(:,:,k-1);
+        Gamma = eye(6);
+        Omegatild_k = dt*Gamma;
 
         % prediction step
-        dxhat_minus = F_t*dxhat(:,k-1) + G_t*du(:,k-1);
+        dxhat_minus = Ftild_k*dxhat(:,k-1) + Gtild_k*du(:,k-1);
+        Pk_minus = Ftild_k*Pk(:,:,k-1); + Omegatild_k*Q*Omegatild_k';
+        % du(:,k) =  
+        % I'm confused about finding du
+        % I think we don't need to?
+        
+        % gain K
+        K = Pk_minus*Htild_k' * inv(Htild_k*Pk_minus*Htild_k' + R);
+
+        % correction step
+        Pk_plus = (eye(6) - K*Htild_k)*Pk_minus;
+        dy = ydata(:,k) - y_truth_sim(:,k,m);
+        dxhat_plus = dxhat_minus + K*(dy-Htild_k*dxhat_minus);
+
+        % results of the state & covariance
+        dxhat(:,k) = dxhat_plus;
+        Pk(:,:,k) = Pk_plus;
+        dyhat(:,k) = dy;
 
     end
     dxhat_all(:,:,m) = dxhat;
+    Pk_plus_all(:,:,:,m) = Pk;
+    dy_KF(:,:,m) = dyhat;
+    xhat_all(:,:,m) = dxhat + x_truth_sim(:,:,m);
+    y_all(:,:,m) = dyhat + y_truth_sim(:,:,m);
 end
+
+%% Plots for Problem 4a
+% Plots for a single ‘typical’ simulation instance, showing the noisy simulated ground truth
+% states, noisy simulated data, and resulting linearized KF state estimation errors
+    % just picking monte carlo iteration #5 arbitrarily as the one to plot
+% noisy simulated ground truth states + corresponding KF estimation 
+figure()
+plot_KF(tarr,x_truth_sim(:,:,5), dxhat_all(:,:,5), xunits, wrap_indices_x)
+sgtitle('Simulated States, Linearized KF','FontSize',14, 'Interpreter','latex')
+
+% noisy simulated data + corresponding KF estimation
+figure()
+plot_KF(tarr, y_truth_sim(:,:,5), y_all(:,:,5), yunits, wrap_indices_y)
+sgtitle('Simulated Measurements, Linearized KF','FontSize',14, 'Interpreter','latex')
+
 
 %% NEES test
 xhat_plus = repmat(xnom,1,1,MC_num) + dxhat_all;
 alpha_NEES = 0.05;
-[did_pass_NEES,too_many_inside_NEES,fig_handle_NEES] = NEES(x_truth, xhat_plus,Pk_plus,alpha_NEES,1);
+[did_pass_NEES,too_many_inside_NEES,fig_handle_NEES] = NEES(x_truth_sim, xhat_plus,Pk_plus,alpha_NEES,1);
 % Inputs:
 % - total state xhat^plus(k) = xnom(k) + dxhat^plus(k)
 % - xtruth, xhat_plus = n x length of time array x N
@@ -269,7 +300,7 @@ alpha_NEES = 0.05;
 
 %% NIS test
 alpha_NIS = alpha_NEES;
-[did_pass_NIS,too_many_inside_NIS,fig_handle_NIS] = NIS(noisy_y, yhat,Sk,alpha_NIS,1);
+[did_pass_NIS,too_many_inside_NIS,fig_handle_NIS] = NIS(y_truth_sim, yhat,Sk,alpha_NIS,1);
 % Inputs:
 % - total measurement state yhat(k) = ynom(k) + dyhat(k)
 % - ytruth, yhat_plus = p x length of time array x N
@@ -341,6 +372,10 @@ F = nan(6,6,num_times);
 G = nan(6,4,num_times);
 H = nan(5,6,num_times);
 M = nan(5,4,num_times);
+Abar = nan(6,6,num_times);
+Bbar = nan(6,4,num_times);
+Cbar = nan(5,6,num_times);
+Dbar = nan(5,4,num_times);
 
     % ------- Jacobians -------
 for ti = 1:num_times
@@ -354,7 +389,7 @@ for ti = 1:num_times
     u2 = unom(2,ti);
     u3 = unom(3,ti);
     u4 = unom(4,ti);
-    Abar = [0 0 -u1*sin(x3) 0 0 0; ...
+    Abar(:,:,ti) = [0 0 -u1*sin(x3) 0 0 0; ...
             0 0 u1*cos(x3) 0 0 0;...
             0 0 0 0 0 0; ...
             0 0 0 0 0 -u3*sin(x6); ...
@@ -362,7 +397,7 @@ for ti = 1:num_times
             0 0 0 0 0 0];
     
     
-    Bbar = [cos(x3) 0 0 0; ...
+    Bbar(:,:,ti) = [cos(x3) 0 0 0; ...
             sin(x3) 0 0 0; ...
             (1/L)*tan(u2) u1/L*(sec(u2))^2 0 0; ...
             0 0 cos(x6) 0; ...
@@ -371,25 +406,25 @@ for ti = 1:num_times
     
     abv = (x4-x1)^2 + (x5-x2)^2;
     
-    Cbar = [(x5-x2)/abv (x1-x4)/abv -1 (x2-x5)/abv (x4-x1)/abv 0; ...
+    Cbar(:,:,ti) = [(x5-x2)/abv (x1-x4)/abv -1 (x2-x5)/abv (x4-x1)/abv 0; ...
             (x1-x4)/sqrt(abv) (x2-x5)/sqrt(abv) 0 (x4-x1)/sqrt(abv) (x5-x2)/sqrt(abv) 0; ...
             (x5-x2)/abv (x1-x4)/abv 0 (x2-x5)/abv (x4-x1)/abv 0; ...
             0 0 0 1 0 0; ...
             0 0 0 0 1 0];
 
 
-    Dbar = zeros(5,4);
+    Dbar(:,:,ti) = zeros(5,4);
     
     
     % Part I, Problem 2.
     
-    z = [Abar Bbar; zeros(4,6) zeros(4)];
+    z = [Abar(:,:,ti) Bbar(:,:,ti); zeros(4,6) zeros(4)];
     ez = expm(z*dt);
     
     F(:,:,ti) = ez(1:6, 1:6);
     G(:,:,ti) = ez(1:6, 7:10);
-    H(:,:,ti) = Cbar;
-    M(:,:,ti) = Dbar;
+    H(:,:,ti) = Cbar(:,:,ti);
+    M(:,:,ti) = Dbar(:,:,ti);
 end
 
 end
@@ -408,6 +443,29 @@ function plot_states(tarr,state,ylabels,wrap_indices)
         ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
         grid on
+    end
+
+end
+
+
+% ------ KALMAN FILTER PLOTTING FUNCTION -------
+
+function plot_KF(tarr,sim_state,KF_state,ylabels,wrap_indices)
+% plot the states using subplots
+    for iw = 1:length(wrap_indices)
+        sim_state(wrap_indices(iw),:)= mod(sim_state(wrap_indices(iw),:)+pi,2*pi)-pi;  
+        KF_state(wrap_indices(iw),:)= mod(KF_state(wrap_indices(iw),:)+pi,2*pi)-pi; 
+    end
+
+    for i=1:size(sim_state,1)
+        subplot(size(sim_state,1),1,i)
+        plot(tarr,sim_state(i,:),'Color','blue','LineWidth',1.5)
+        hold on
+        plot(tarr,KF_state(i,:),'Color','red','LineWidth',1.5)
+        ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
+        xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
+        grid on
+        legend('Simulated ground truth', 'KF output')
     end
 
 end
