@@ -245,7 +245,7 @@ for m = 1:MC_num % for each MC iteration
 
         % prediction step
         dxhat_minus = Ftild_k*dxhat(:,k-1) + Gtild_k*du(:,k-1);
-        Pk_minus = Ftild_k*Pk(:,:,k-1); + Omegatild_k*Q*Omegatild_k';
+        Pk_minus = Ftild_k*Pk(:,:,k-1)*Ftild_k' + Omegatild_k*Q*Omegatild_k';
         % du(:,k) =  
         % I'm confused about finding du
         % I think we don't need to?
@@ -255,7 +255,11 @@ for m = 1:MC_num % for each MC iteration
 
         % correction step
         Pk_plus = (eye(6) - K*Htild_k)*Pk_minus;
-        dy = ydata(:,k) - y_truth_sim(:,k,m);
+
+        pretend_y_data = y_truth_sim(:,k,m);
+        predicted_y = ynom(:,k);
+        %dy = ydata(:,k) - y_truth_sim(:,k,m);
+        dy= pretend_y_data-predicted_y;
         dxhat_plus = dxhat_minus + K*(dy-Htild_k*dxhat_minus);
 
         % results of the state & covariance
