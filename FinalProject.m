@@ -340,55 +340,80 @@ end
 
 %% Part II, Problem 5
 
-for m = 1:MC_num % For each Monte Carlo iteration
-    % Simulate truth state
-    xtrue0 = mvnrnd(xnom_t0, P0)'; % Sample initial state
-    [t, x_truth] = ode45(@(t, y) NL_ode(t, y, v_g0, phi_g0, v_a0, omega_a0, wk(1:3), wk(4:6), L), tarr, xtrue0);
-    x_truth_sim(:, :, m) = x_truth';
+
+% Initialization
+dxhat_all = zeros(6, length(tarr), MC_num); % dxhat+ (state estimate)
+Pk_plus_all = zeros(6, 6, length(tarr), MC_num); % State covariance
+dy_KF = zeros(5, length(tarr), MC_num); % Predicted measurements
+xhat_all = zeros(6, length(tarr), MC_num); % Final state estimate
+y_all = zeros(5, length(tarr), MC_num); % Actual measurements
+
+for m = 1:MC_num % Monte Carlo iterations
+
+    % Simulate truth state for NEES and NIS tests
+    xtrue0 = mvnrnd(xnom_t0, P0)'; % initial state
+    wk = mvnrnd(zeros(1, 6), Q)'; 
+
+    [~, x_truth] = ode45(@(t, y) NL_ode(t, y, v_g0, phi_g0, v_a0, omega_a0, wk(1:3), wk(4:6), L), tarr, xtrue0);
+    x_truth_sim(:, :, m) = x_truth'; %to match dimensions
 
     % Simulate measurements
+    vk = mvnrnd(zeros(1, 5), R)'; % Measurement noise
     for k = 1:length(tarr)
         y_truth_sim(:, k, m) = calc_obs_from_state(x_truth_sim(:, k, m), vk);
     end
 
     % Initialize EKF
+    dxhat0 = xnom_t0;
     dxhat = zeros(6, length(tarr)); 
     dxhat(:, 1) = deltx0; % Initial state estimate
-    Pk(:, :, 1) = P0;
 
-    for k = 2:length(tarr) % For each timestep
-        % Extract precomputed Jacobians
-        F_t = eye(6) + dt * Abar(:, :, k-1); % Linearized state transition
-        G_t = dt * Bbar(:, :, k-1); % Input matrix
-        H_t = Cbar(:, :, k); % Linearized measurement
-        Omega_t = eye(6); % Process noise influence (identity if omitted)
+    Pk = eye(6);
+    Pk_all = zeros(6, 6, length(tarr)); 
+    Pk_all(:, :, 1) = Pk;
+
+    for k = 2:length(tarr)
+
+        % Calculate Jacobians for each time step using current state
+        Ftild_k = eye(6) + dt * Abar(:, :, k-1); % State transition matrix
+        Gtild_k = dt * Bbar(:, :, k-1); % Input matrix
+        Htild_k = H(:, :, k); % Measurement Jacobian
+        Omegatild_k = dt * eye(6); % Process noise matrix
+    
+        %EKF prediction
+        my_ode = @(t, xhat) NL_ode(t, xhat, unom(:, k-1), Q, L); 
+        [~, xhat_minus] = ode45(my_ode, [tarr(k-1), tarr(k)], dxhat(:, k-1));
+        xhat_minus = xhat_minus(end, :)'; % Take last output as predicted state
         
-        % Nonlinear state prediction
-        x_pred = xnom(:, k-1) + dxhat(:, k-1);
-        dxhat_minus = F_t * dxhat(:, k-1) + G_t * unom(:, k-1); % Linearized prediction
-        
-        % Covariance prediction
-        Pk_minus = F_t * Pk(:, :, k-1) * F_t' + Omega_t * Q * Omega_t';
+    
+        % covariance 
+        Pk_minus = Ftild_k * Pk_all(:, :, k-1) * Ftild_k' + Omegatild_k * Q * Omegatild_k';
+    
+        % correction
+        Sk = Htild_k * Pk_minus * Htild_k' + R;
+        Kk = Pk_minus * Htild_k' / Sk;
 
-        % Kalman gain
-        Sk_val = H_t * Pk_minus * H_t' + R;
-        K = Pk_minus * H_t' / Sk_val;
+        % innovation
+        dy_k = y_truth_sim(:, k, m) - ynom(:, k); % Actual measurements - predicted
+        innovation = dy_k - Htild_k * (xhat_minus - xnom(:, k));
 
-        % Measurement update
-        y_pred = Cbar(:, :, k) * dxhat_minus + Dbar(:, :, k) * unom(:, k); % Predicted measurement
-        dy = y_truth_sim(:, k, m) - y_pred; % Innovation
-        dxhat_plus = dxhat_minus + K * dy;
-        Pk_plus = (eye(6) - K * H_t) * Pk_minus;
+        dxhat_plus = xhat_minus + Kk * innovation;
+        Pk_plus = (eye(6) - Kk * Htild_k) * Pk_minus;
 
-        % Store results
+    
+        % Save results
         dxhat(:, k) = dxhat_plus;
-        Pk(:, :, k) = Pk_plus;
+        Pk_all(:, :, k) = Pk_plus;
+        dy_KF(:, k, m) = Htild_k * dxhat_minus; % Predicted measurements
     end
 
     % Save results for this Monte Carlo iteration
     dxhat_all(:, :, m) = dxhat;
-    Pk_plus_all(:, :, :, m) = Pk;
+    Pk_plus_all(:, :, :, m) = Pk_all;
+    y_all(:, :, m) = dy_KF;
+    xhat_all(:, :, m) = dxhat + xnom;
 end
+
 
 
 %% Functions
