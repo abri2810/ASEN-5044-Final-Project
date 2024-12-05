@@ -375,14 +375,18 @@ for m = 1:MC_num % Monte Carlo iterations
     for k = 2:length(tarr)
 
         % Calculate Jacobians for each time step using current state
-        Ftild_k = eye(6) + dt * Abar(:, :, k-1); % State transition matrix
-        Gtild_k = dt * Bbar(:, :, k-1); % Input matrix
-        Htild_k = H(:, :, k); % Measurement Jacobian
+        Abar_k = compute_Abar(dxhat(:, k-1), unom(:, k-1));
+        Bbar_k = compute_Bbar(dxhat(:, k-1), unom(:, k-1));
+        H_k = compute_Cbar(dxhat(:, k-1));
+
+        Ftild_k = eye(6) + dt * Abar_k; % State transition matrix
+        Gtild_k = dt * Bbar_k; % Input matrix
+        Htild_k = H_k; % Measurement Jacobian
         Omegatild_k = dt * eye(6); % Process noise matrix
     
         %EKF prediction
-        
-        my_ode = @(t, y) NL_ode(t, y, unom(1, k-1), unom(2, k-1), unom(3, k-1), unom(4, k-1),wk(1:3),wk(4:6), L);
+        % From lecture notes: assume wk=0
+        my_ode = @(t, y) NL_ode(t, y, unom(1, k-1), unom(2, k-1), unom(3, k-1), unom(4, k-1),zeros(3),zeros(3), L); 
         [~, xhat_minus] = ode45(my_ode, [tarr(k-1), tarr(k)], dxhat(:, k-1));
 
         xhat_minus = xhat_minus(end, :)'; % Take last output as predicted state
@@ -390,14 +394,16 @@ for m = 1:MC_num % Monte Carlo iterations
     
         % covariance 
         Pk_minus = Ftild_k * Pk_all(:, :, k-1) * Ftild_k' + Omegatild_k * Q * Omegatild_k';
-    
+   
+
+        % innovation
+        predicted_y = compute_H(xhat_minus);
+        dy_k = y_truth_sim(:, k, m) - predicted_y; % Actual measurements - predicted  
+        innovation = dy_k - Htild_k * (xhat_minus); % do we need to subtract something from xhat_minus? like the truth x?
+
         % correction
         Sk = Htild_k * Pk_minus * Htild_k' + R;
         Kk = Pk_minus * Htild_k' / Sk;
-
-        % innovation
-        dy_k = y_truth_sim(:, k, m) - ynom(:, k); % Actual measurements - predicted
-        innovation = dy_k - Htild_k * (xhat_minus - xnom(:, k));
 
         dxhat_plus = xhat_minus + Kk * innovation;
         Pk_plus = (eye(6) - Kk * Htild_k) * Pk_minus;
@@ -617,4 +623,85 @@ function y = calc_obs_from_state(x,vtilde)
              x4;...
              x5];
 
+end
+
+% -----------DYNAMIC ABAR, BBAR, HBAR MATRICES FOR EKF----------------
+
+function Abar = compute_Abar(x, u)
+    % Extract state variables
+    x3 = x(3); % theta_g
+    x6 = x(6); % theta_a
+    
+    % Extract input variables
+    u1 = u(1); % v_g
+    u2 = u(2); % phi_g
+    u3 = u(3); % v_a
+    
+    % Define Abar matrix
+    Abar = [0 0 -u1*sin(x3)  0  0  0;...
+        0 0  u1*cos(x3)  0  0  0;...
+        0 0  0  0  0  0;...
+        0 0  0  0  0 -u3*sin(x6);...
+        0 0  0  0  0 u3*cos(x6);...
+        0 0  0  0  0  0];
+end
+
+
+
+function Bbar = compute_Bbar(x, u)
+    % Extract state variables
+    x3 = x(3); % theta_g
+    x6 = x(6); % theta_a
+    L = .5;
+    
+    % Extract input variables
+    u1 = u(1); % v_g
+    u2 = u(2); % phi_g
+    
+    % Define Bbar matrix
+    Bbar = [cos(x3)  0  0  0;...
+        sin(x3)  0  0  0;...
+        (1/L)*tan(u2) u1/(L*(sec(u2)^2))  0  0;... 
+        0  0 cos(x6)  0;...
+        0  0 sin(x6)  0;...
+        0  0 0  1];
+end
+
+function Cbar = compute_Cbar(x)
+    % Extract state variables
+    x1 = x(1); % xi_g
+    x2 = x(2); % eta_g
+    x3 = x(3); % theta_g
+    x4 = x(4); % xi_a
+    x5 = x(5); % eta_a
+    x6 = x(6); % theta_a
+
+    % Precompute terms
+    abv = (x4 - x1)^2 + (x5 - x2)^2; % Distance squared between ground and air vehicles
+
+    % Define Cbar matrix
+    Cbar = [(x5-x2)/abv  (x1-x4)/abv  -1  (x2-x5)/abv  (x4-x1)/abv  0;...
+        (x1-x4)/sqrt(abv)  (x2-x5)/sqrt(abv)  0  (x4-x1)/sqrt(abv)  (x5-x2)/sqrt(abv)  0;...
+        (x5-x2)/abv  (x1-x4)/abv  0  (x2-x5)/abv  (x4-x1)/abv  -1;...
+        0  0  0  1  0  0;...
+        0  0  0  0  1  0];
+end
+
+
+
+function y = compute_H(x)
+    % Extract state variables
+    x1 = x(1); % xi_g
+    x2 = x(2); % eta_g
+    x3 = x(3); % theta_g
+    x4 = x(4); % xi_a
+    x5 = x(5); % eta_a
+    x6 = x(6); % theta_a
+
+    % Compute measurements
+     y = [atan2( (x5-x2) , (x4-x1) ) - x3;...
+             sqrt( (-x4+x1).^2 + (-x5+x2).^2 );...
+             atan2( (x2-x5) , (x1-x4) ) - x6;...
+             x4;...
+             x5];
 end
