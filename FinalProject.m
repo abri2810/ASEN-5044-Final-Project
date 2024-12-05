@@ -180,14 +180,14 @@ Sk_plus_all = zeros(5,5,length(tarr),MC_num); % Pk plus
 % initialize state matrix
     % 6x1, for each timestep, for each MC
 dxhat_all = zeros(6,length(tarr),MC_num); % dx hat plus, given by KF
-dx_truth_sim = zeros(6,length(tarr),MC_num); % simulated noisy truth perturbation
+%dx_truth_sim = zeros(6,length(tarr),MC_num); % simulated noisy truth perturbation
 x_truth_sim = zeros(6,length(tarr),MC_num); % simulated truth state
 xhat_all = zeros(6,length(tarr),MC_num);
 
 % initialize measurements matrix
     % 5x1, for each timestep, for each MC
 dy_KF = zeros(5, length(tarr),MC_num); % dy given by KF
-dy_truth_sim = zeros(5, length(tarr),MC_num); % simulated measurement perturbations
+% dy_truth_sim = zeros(5, length(tarr),MC_num); % simulated measurement perturbations
 y_truth_sim = zeros(5, length(tarr),MC_num); % ynom + noisy_dy
 y_all = zeros(5, length(tarr),MC_num); % y given by KF
 
@@ -196,26 +196,26 @@ for m = 1:MC_num % for each MC iteration
     % First, simulate truth state as "truth" for the NEES  test.
     % Also simulate corresponding measurements to use as "truth" for NIS 
     % test and as input to KF filter.
-    xtrue0 = mvnrnd(xnom_t0,P0)'; % sample initial state % not sure if this is right!!
-    dx_truth_sim(:,1,m) = xtrue0-xnom_t0;
-    for k=2:length(tarr)
+    xtrue0 = mvnrnd(xnom_t0,P0)'; % sample initial state % not sure if this is right!!    
       
         %%simulate process noise and add to actual state
         wk = mvnrnd(zeros(1,6),Q)';
-        F_t = squeeze(F(:,:,k));
-        G_t = squeeze(G(:,:,k));
-
-        dx_truth_sim(:,k,m) = F_t*dx_truth_sim(:,k-1,m) + G_t*du(:,k-1) + wk; 
+        %F_t = squeeze(F(:,:,k));
+        %G_t = squeeze(G(:,:,k));
         
-        %%simulate measurement noise and add to sensor data
+        % use ode45 for this (according to prof)
+        %%%dx_truth_sim(:,k,m) = F_t*dx_truth_sim(:,k-1,m) + G_t*du(:,k-1) + wk; 
+        my_ode = @(t,y) NL_ode(t,y,v_g0,phi_g0,v_a0,omega_a0,wk(1:3),wk(4:6),L);
+        [t,x] = ode45(my_ode,tarr,xtrue0);
+        x_truth_sim(:,:,m) = x';
+
+        % simulate measurement noise and add to sensor data
         vk = mvnrnd(zeros(1,size(ydata,1)),R)';
-        H_t = squeeze(H(:,:,k));
-        M_t = squeeze(M(:,:,k));
-        dy_truth_sim(:,k,m) = H_t*dx_truth_sim(:,k,m) + M_t*du(:,k) + vk; 
-    end
-     % add simulated dx and dy to the nominal states
-     x_truth_sim(:,:,m) = xnom + dx_truth_sim(:,:,m);
-     y_truth_sim(:,:,m) = ynom + dy_truth_sim(:,:,m);
+        y_truth_sim(:,:,m) = calc_obs_from_state(x_truth_sim(:,:,m),vk);
+        %H_t = squeeze(H(:,:,k));
+        %M_t = squeeze(M(:,:,k));
+        %y_truth_sim(:,:,m) = H_t*dx_truth_sim(:,k,m) + M_t*du(:,k) + vk; 
+   
     
     % ----------------
     % Next, use the simulated "truth" measurements as inputs to KF
@@ -247,9 +247,6 @@ for m = 1:MC_num % for each MC iteration
         % prediction step
         dxhat_minus = Ftild_k*dxhat(:,k-1) + Gtild_k*du(:,k-1);
         Pk_minus = Ftild_k*Pk(:,:,k-1)*Ftild_k' + Omegatild_k*Q*Omegatild_k';
-        % du(:,k) =  
-        % I'm confused about finding du
-        % I think we don't need to?
         
         % gain K
         Skval = Htild_k*Pk_minus*Htild_k' + R;
