@@ -337,6 +337,60 @@ for i=1:length(tarr)
         end
     end
 end
+
+%% Part II, Problem 5
+
+for m = 1:MC_num % For each Monte Carlo iteration
+    % Simulate truth state
+    xtrue0 = mvnrnd(xnom_t0, P0)'; % Sample initial state
+    [t, x_truth] = ode45(@(t, y) NL_ode(t, y, v_g0, phi_g0, v_a0, omega_a0, wk(1:3), wk(4:6), L), tarr, xtrue0);
+    x_truth_sim(:, :, m) = x_truth';
+
+    % Simulate measurements
+    for k = 1:length(tarr)
+        y_truth_sim(:, k, m) = calc_obs_from_state(x_truth_sim(:, k, m), vk);
+    end
+
+    % Initialize EKF
+    dxhat = zeros(6, length(tarr)); 
+    dxhat(:, 1) = deltx0; % Initial state estimate
+    Pk(:, :, 1) = P0;
+
+    for k = 2:length(tarr) % For each timestep
+        % Extract precomputed Jacobians
+        F_t = eye(6) + dt * Abar(:, :, k-1); % Linearized state transition
+        G_t = dt * Bbar(:, :, k-1); % Input matrix
+        H_t = Cbar(:, :, k); % Linearized measurement
+        Omega_t = eye(6); % Process noise influence (identity if omitted)
+        
+        % Nonlinear state prediction
+        x_pred = xnom(:, k-1) + dxhat(:, k-1);
+        dxhat_minus = F_t * dxhat(:, k-1) + G_t * unom(:, k-1); % Linearized prediction
+        
+        % Covariance prediction
+        Pk_minus = F_t * Pk(:, :, k-1) * F_t' + Omega_t * Q * Omega_t';
+
+        % Kalman gain
+        Sk_val = H_t * Pk_minus * H_t' + R;
+        K = Pk_minus * H_t' / Sk_val;
+
+        % Measurement update
+        y_pred = Cbar(:, :, k) * dxhat_minus + Dbar(:, :, k) * unom(:, k); % Predicted measurement
+        dy = y_truth_sim(:, k, m) - y_pred; % Innovation
+        dxhat_plus = dxhat_minus + K * dy;
+        Pk_plus = (eye(6) - K * H_t) * Pk_minus;
+
+        % Store results
+        dxhat(:, k) = dxhat_plus;
+        Pk(:, :, k) = Pk_plus;
+    end
+
+    % Save results for this Monte Carlo iteration
+    dxhat_all(:, :, m) = dxhat;
+    Pk_plus_all(:, :, :, m) = Pk;
+end
+
+
 %% Functions
 
 % -------- ODE45 ----------
