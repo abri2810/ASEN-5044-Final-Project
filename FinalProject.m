@@ -381,8 +381,10 @@ for m = 1:MC_num % Monte Carlo iterations
         Omegatild_k = dt * eye(6); % Process noise matrix
     
         %EKF prediction
-        my_ode = @(t, xhat) NL_ode(t, xhat, unom(:, k-1), Q, L); 
+        
+        my_ode = @(t, y) NL_ode(t, y, unom(1, k-1), unom(2, k-1), unom(3, k-1), unom(4, k-1),wk(1:3),wk(4:6), L);
         [~, xhat_minus] = ode45(my_ode, [tarr(k-1), tarr(k)], dxhat(:, k-1));
+
         xhat_minus = xhat_minus(end, :)'; % Take last output as predicted state
         
     
@@ -410,7 +412,7 @@ for m = 1:MC_num % Monte Carlo iterations
     % Save results for this Monte Carlo iteration
     dxhat_all(:, :, m) = dxhat;
     Pk_plus_all(:, :, :, m) = Pk_all;
-    y_all(:, :, m) = dy_KF;
+    y_all(:, :, m) = dy_KF(:,:,m);
     xhat_all(:, :, m) = dxhat + xnom;
 end
 
