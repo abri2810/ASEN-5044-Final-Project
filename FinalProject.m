@@ -288,7 +288,7 @@ end
     % just picking monte carlo iteration #5 arbitrarily as the one to plot
 % noisy simulated ground truth states + corresponding KF estimation 
 figure()
-plot_KF(tarr,x_truth_sim(:,:,5), dxhat_all(:,:,5), xunits, wrap_indices_x)
+plot_KF(tarr,x_truth_sim(:,:,5), xhat_all(:,:,5), xunits, wrap_indices_x)
 sgtitle('Simulated States, Linearized KF','FontSize',14, 'Interpreter','latex')
 
 % noisy simulated data + corresponding KF estimation
@@ -432,7 +432,7 @@ end
     % just picking monte carlo iteration #5 arbitrarily as the one to plot
 % noisy simulated ground truth states + corresponding KF estimation 
 figure()
-plot_KF(tarr,x_truth_sim(:,:,5), dxhat_all(:,:,5), xunits, wrap_indices_x)
+plot_KF(tarr,x_truth_sim(:,:,5), xhat_all(:,:,5), xunits, wrap_indices_x)
 sgtitle('Simulated States, EKF','FontSize',14, 'Interpreter','latex')
 
 % noisy simulated data + corresponding KF estimation
