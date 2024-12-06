@@ -343,7 +343,7 @@ end
 
 % Initialization
 Pk_plus_all = zeros(6, 6, length(tarr), MC_num); % State covariance
-dy_KF = zeros(5, length(tarr), MC_num); % Predicted measurements
+y_KF = zeros(5, length(tarr), MC_num); % Predicted measurements
 xhat_all = zeros(6, length(tarr), MC_num); % Final state estimate
 y_all = zeros(5, length(tarr), MC_num); % Actual measurements
 
@@ -375,11 +375,9 @@ for m = 1:MC_num % Monte Carlo iterations
         % Calculate Jacobians for each time step using current state
         Abar_k = compute_Abar(xhat(:, k-1), unom(:, k-1)); %does unom change?
         Bbar_k = compute_Bbar(xhat(:, k-1), unom(:, k-1)); %does unom change?
-        H_k = compute_Cbar(xhat(:, k-1));
 
         Ftild_k = eye(6) + dt * Abar_k; % State transition matrix
         Gtild_k = dt * Bbar_k; % Input matrix
-        Htild_k = H_k; % Measurement Jacobian
         Omegatild_k = dt * eye(6);   %does this need to change per timestep? The slide gives omegatild_k=dt*gamma(t). But what is gamma(t)?
 
         % Compute Q_k dynamically
@@ -399,22 +397,33 @@ for m = 1:MC_num % Monte Carlo iterations
 
         % innovation
         predicted_y = compute_H(xhat_minus);
-        dy_k = y_truth_sim(:, k, m) - predicted_y; % Actual measurements - predicted  
-        innovation = dy_k - Htild_k * (xhat_minus); % do we need to subtract something from xhat_minus? like the truth x?
+        Htild_k = compute_Cbar(xhat_minus); % I believe this is the same as dh/dx from Lecture 32 slide 7
+
+        ey_k = y_truth_sim(:, k, m) - predicted_y; % Actual measurements - predicted  
+        
+        %Do we need this? It's not in the slides. I believe the ey_k above
+        %captures the innovation.
+        %innovation = y_truth_sim - Htild_k * (xhat_minus); 
 
         % correction
-        Sk = Htild_k * Pk_minus * Htild_k' + R;
+        Sk = Htild_k * Pk_minus * Htild_k' + R; %does R need to change with each step?
+        Skval = 0.5*(Sk + Sk'); %taken from part 4. Do we need this?
+
         Kk = Pk_minus * Htild_k' / Sk;
 
-        xhat_plus = xhat_minus + Kk * innovation;
+        xhat_plus = xhat_minus + Kk * ey_k;
         Pk_plus = (eye(6) - Kk * Htild_k) * Pk_minus;
 
     
         % Save results
         xhat(:, k) = xhat_plus;
         Pk_all(:, :, k) = Pk_plus;
-        dy_KF(:, k, m) = Htild_k * xhat_minus; % Predicted measurements
-        innovation(:,k) = innovation_k;
+        y_KF(:, k, m) = predicted_y;
+        %ey_KF(:, k, m) = Htild_k * xhat_minus; % Predicted measurements
+        innovation(:,k) = ey_k;
+        Sk(:,:,k) = Skval;
+
+        
 
     end
 
@@ -423,6 +432,8 @@ for m = 1:MC_num % Monte Carlo iterations
     y_all(:, :, m) = dy_KF(:,:,m);
     xhat_all(:, :, m) = xhat;
     innovation_all(:,:,m) = innovation;
+    Sk_all(:,:,:,m) = Sk;
+
     
 end
 
