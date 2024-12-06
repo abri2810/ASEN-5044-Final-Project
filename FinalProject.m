@@ -83,7 +83,7 @@ for i = 2:length(tarr)
 end
 
 full_state = xnom + d_state; % x = x_nom + dx
-vtilde_nom = zeros(size(full_state));
+vtilde_nom = zeros(5,size(full_state,2));
 ynom = calc_obs_from_state(xnom,vtilde_nom);
 
 % full state solved with ODE45
@@ -608,12 +608,12 @@ function plot_KF(tarr,sim_state,KF_state,ylabels,wrap_indices)
 end
 
 function y = calc_obs_from_state(x,vtilde)
-    x1 = x(1,:)+vtilde(1,:);
-    x2 = x(2,:)+vtilde(1,:);
-    x3 = x(3,:)+vtilde(1,:);
-    x4 = x(4,:)+vtilde(1,:);
-    x5 = x(5,:)+vtilde(1,:);
-    x6 = x(6,:)+vtilde(1,:);
+    x1 = x(1,:);
+    x2 = x(2,:);
+    x3 = x(3,:);
+    x4 = x(4,:);
+    x5 = x(5,:);
+    x6 = x(6,:);
     %x3= mod(x3+pi,2*pi)-pi;
     %x6= mod(x6+pi,2*pi)-pi;
        
@@ -621,7 +621,7 @@ function y = calc_obs_from_state(x,vtilde)
              sqrt( (-x4+x1).^2 + (-x5+x2).^2 );...
              atan2( (x2-x5) , (x1-x4) ) - x6;...
              x4;...
-             x5];
+             x5]+vtilde;
 
 end
 
