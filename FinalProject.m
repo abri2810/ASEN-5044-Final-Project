@@ -114,49 +114,49 @@ wrap_indices_x = [3,6];
 wrap_indices_y = [1,3];
 % plot linearized perturbations
 %fig1 = figure('units','normalized','outerposition',[0 1 .5 1]);
-figure(Visible="on")
+figure(Visible="off")
 plot_states(tarr,d_state,dxunits,[])
 sgtitle('Linearized Approximate Perturbations vs. Time','FontSize',14, 'Interpreter','latex')
 
 % plot full linearized state
 % fig2 = figure('units','normalized','outerposition',[0 1 .5 1]);
 %   ^ This line of code isn't compatible with matlab 2024a, had to change it!
-figure(Visible="on")
+figure(Visible="off")
 plot_states(tarr,full_state,xunits,wrap_indices_x)
 sgtitle('States vs. Time, Linearized Approximate Dynamics Simulation','FontSize',14, 'Interpreter','latex')
 
 % States vs. Time, Full Nonlinear Dynamics Simulation
 % fig3 = figure('units','normalized','outerposition',[0 1 .5 1]);
 %   ^ This line of code isn't compatible with matlab 2024a, had to change it!
-figure(Visible="on")
+figure(Visible="off")
 plot_states(tarr,state_perturbed_ode,xunits,wrap_indices_x)
 sgtitle('States vs. Time, Full Nonlinear Dynamics Simulation','FontSize',14, 'Interpreter','latex')
 
 % plot measurements, linearized
 %fig4 = figure('units','normalized','outerposition',[0 1 .5 1]);
 %   ^ This line of code isn't compatible with matlab 2024a, had to change it!
-figure(Visible="on")
+figure(Visible="off")
 plot_states(tarr,y_linearized,yunits,[1,3])
 sgtitle('Linearized Approximate Dynamics Measurements','FontSize',14, 'Interpreter','latex')
 
 % plot measurements from ode
 %fig5 = figure('units','normalized','outerposition',[0 1 .5 1]);
 %   ^ This line of code isn't compatible with matlab 2024a, had to change it!
-figure(Visible="on")
+figure(Visible="off")
 plot_states(tarr,y_ode,yunits,[1,3])
 sgtitle('Full Nonlinear Measurements','FontSize',14, 'Interpreter','latex')
 
 % Full Nonlinear Dynamics Simulation minus full linearized state
 %fig6 = figure('units','normalized','outerposition',[0 1 .5 1]);
 %   ^ This line of code isn't compatible with matlab 2024a, had to change it!
-figure(Visible="on")
+figure(Visible="off")
 plot_states(tarr,state_perturbed_ode-full_state,xunits,wrap_indices_x)
 sgtitle('States vs. Time, ODE Minus Linearization','FontSize',14, 'Interpreter','latex')
 
 % plot measurements from ode minus measurements, linearized
 %fig7 = figure('units','normalized','outerposition',[0 1 .5 1]);
 %   ^ This line of code isn't compatible with matlab 2024a, had to change it!
-figure(Visible="on")
+figure(Visible="off")
 plot_states(tarr,y_ode-y_linearized,dyunits,[1,3])
 sgtitle('ODE Measurements Minus Linearization Measurements','FontSize',14, 'Interpreter','latex')
 
@@ -342,7 +342,6 @@ end
 
 
 % Initialization
-dxhat_all = zeros(6, length(tarr), MC_num); % dxhat+ (state estimate)
 Pk_plus_all = zeros(6, 6, length(tarr), MC_num); % State covariance
 dy_KF = zeros(5, length(tarr), MC_num); % Predicted measurements
 xhat_all = zeros(6, length(tarr), MC_num); % Final state estimate
@@ -364,36 +363,38 @@ for m = 1:MC_num % Monte Carlo iterations
     end
 
     % Initialize EKF
-    dxhat0 = xnom_t0;
-    dxhat = zeros(6, length(tarr)); 
-    dxhat(:, 1) = deltx0; % Initial state estimate
+    xhat = zeros(6, length(tarr)); 
+    xhat(:, 1) = xnom_t0; % Initial state estimate
 
-    Pk = eye(6);
+    Pk = eye(6); %identity matrix as an initial guess?
     Pk_all = zeros(6, 6, length(tarr)); 
     Pk_all(:, :, 1) = Pk;
 
     for k = 2:length(tarr)
 
         % Calculate Jacobians for each time step using current state
-        Abar_k = compute_Abar(dxhat(:, k-1), unom(:, k-1));
-        Bbar_k = compute_Bbar(dxhat(:, k-1), unom(:, k-1));
-        H_k = compute_Cbar(dxhat(:, k-1));
+        Abar_k = compute_Abar(xhat(:, k-1), unom(:, k-1)); %does unom change?
+        Bbar_k = compute_Bbar(xhat(:, k-1), unom(:, k-1)); %does unom change?
+        H_k = compute_Cbar(xhat(:, k-1));
 
         Ftild_k = eye(6) + dt * Abar_k; % State transition matrix
         Gtild_k = dt * Bbar_k; % Input matrix
         Htild_k = H_k; % Measurement Jacobian
-        Omegatild_k = dt * eye(6); % Process noise matrix
+        Omegatild_k = dt * eye(6);   %does this need to change per timestep? The slide gives omegatild_k=dt*gamma(t). But what is gamma(t)?
+
+        % Compute Q_k dynamically
+        Q_k = Q; % need to figure out how to change this at every time step
     
         %EKF prediction
         % From lecture notes: assume wk=0
         my_ode = @(t, y) NL_ode(t, y, unom(1, k-1), unom(2, k-1), unom(3, k-1), unom(4, k-1),zeros(3),zeros(3), L); 
-        [~, xhat_minus] = ode45(my_ode, [tarr(k-1), tarr(k)], dxhat(:, k-1));
+        [~, xhat_minus] = ode45(my_ode, [tarr(k-1), tarr(k)], xhat(:, k-1));
 
         xhat_minus = xhat_minus(end, :)'; % Take last output as predicted state
         
     
         % covariance 
-        Pk_minus = Ftild_k * Pk_all(:, :, k-1) * Ftild_k' + Omegatild_k * Q * Omegatild_k';
+        Pk_minus = Ftild_k * Pk_all(:, :, k-1) * Ftild_k' + Omegatild_k * Q_k * Omegatild_k';
    
 
         % innovation
@@ -405,25 +406,24 @@ for m = 1:MC_num % Monte Carlo iterations
         Sk = Htild_k * Pk_minus * Htild_k' + R;
         Kk = Pk_minus * Htild_k' / Sk;
 
-        dxhat_plus = xhat_minus + Kk * innovation;
+        xhat_plus = xhat_minus + Kk * innovation;
         Pk_plus = (eye(6) - Kk * Htild_k) * Pk_minus;
 
     
         % Save results
-        dxhat(:, k) = dxhat_plus;
+        xhat(:, k) = xhat_plus;
         Pk_all(:, :, k) = Pk_plus;
-        dy_KF(:, k, m) = Htild_k * dxhat_minus; % Predicted measurements
+        dy_KF(:, k, m) = Htild_k * xhat_minus; % Predicted measurements
         innovation(:,k) = innovation_k;
 
     end
 
     % Save results for this Monte Carlo iteration
-    dxhat_all(:, :, m) = dxhat;
     Pk_plus_all(:, :, :, m) = Pk_all;
     y_all(:, :, m) = dy_KF(:,:,m);
-    xhat_all(:, :, m) = dxhat + xnom;
+    xhat_all(:, :, m) = xhat;
     innovation_all(:,:,m) = innovation;
-
+    
 end
 
 %% Plots for Problem 5a/EFK
@@ -441,7 +441,7 @@ plot_KF(tarr, y_truth_sim(:,:,5), y_all(:,:,5), yunits, wrap_indices_y)
 sgtitle('Simulated Measurements, EKF','FontSize',14, 'Interpreter','latex')
 
 %% NEES test for EKF
-xhat_plus = repmat(xnom,1,1,MC_num) + dxhat_all;
+xhat_plus = xhat_all; % Is this correct for EKF version?
 alpha_NEES = 0.05;
 [did_pass_NEES,too_many_inside_NEES,fig_handle_NEES] = NEES(x_truth_sim, xhat_plus,Pk_plus_all,alpha_NEES,1);
 % Inputs:
