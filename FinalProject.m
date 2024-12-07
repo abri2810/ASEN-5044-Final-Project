@@ -366,22 +366,22 @@ for m = 1:MC_num % Monte Carlo iterations
     xhat = zeros(6, length(tarr)); 
     xhat(:, 1) = xnom_t0; % Initial state estimate
 
-    Pk = eye(6); %identity matrix as an initial guess?
+    Pk = P0; %or identity matrix eye(6) as an initial guess?
     Pk_all = zeros(6, 6, length(tarr)); 
     Pk_all(:, :, 1) = Pk;
 
     for k = 2:length(tarr)
 
         % Calculate Jacobians for each time step using current state
-        Abar_k = compute_Abar(xhat(:, k-1), unom(:, k-1)); %does unom change?
-        Bbar_k = compute_Bbar(xhat(:, k-1), unom(:, k-1)); %does unom change?
+        Abar_k = compute_Abar(xhat(:, k-1), unom(:, k-1)); %does unom change? no
+        Bbar_k = compute_Bbar(xhat(:, k-1), unom(:, k-1)); %does unom change? no
 
         Ftild_k = eye(6) + dt * Abar_k; % State transition matrix
-        Gtild_k = dt * Bbar_k; % Input matrix
-        Omegatild_k = dt * eye(6);   %does this need to change per timestep? The slide gives omegatild_k=dt*gamma(t). But what is gamma(t)?
+        Gtild_k = dt * Bbar_k; % Input matrix. IS THIS RIGHT?
+        Omegatild_k = dt * eye(6);   %does this need to change per timestep? No
 
         % Compute Q_k dynamically
-        Q_k = Q; % need to figure out how to change this at every time step
+        Q_k = 4000000*Q; % need to figure out how to change this at every time step
     
         %EKF prediction
         % From lecture notes: assume wk=0
@@ -396,7 +396,7 @@ for m = 1:MC_num % Monte Carlo iterations
    
 
         % innovation
-        predicted_y = compute_H(xhat_minus);
+        predicted_y = compute_Y(xhat_minus);
         Htild_k = compute_Cbar(xhat_minus); % I believe this is the same as dh/dx from Lecture 32 slide 7
 
         ey_k = y_truth_sim(:, k, m) - predicted_y; % Actual measurements - predicted  
@@ -406,7 +406,7 @@ for m = 1:MC_num % Monte Carlo iterations
         %innovation = y_truth_sim - Htild_k * (xhat_minus); 
 
         % correction
-        Sk = Htild_k * Pk_minus * Htild_k' + R; %does R need to change with each step?
+        Sk = Htild_k * Pk_minus * Htild_k' + R;
         Skval = 0.5*(Sk + Sk'); %taken from part 4. Do we need this?
 
         Kk = Pk_minus * Htild_k' / Sk;
@@ -446,10 +446,30 @@ figure()
 plot_KF(tarr,x_truth_sim(:,:,5), xhat_all(:,:,5), xunits, wrap_indices_x)
 sgtitle('Simulated States, EKF','FontSize',14, 'Interpreter','latex')
 
+% Calculate the averages across all runs
+xhat_avg = mean(xhat_all, 3); % Mean along the 3rd dimension
+x_truth_avg = mean(x_truth_sim, 3); % Mean along the 3rd dimension
+
+% Plot the averaged results
+figure()
+plot_KF(tarr, x_truth_avg, xhat_avg, xunits, wrap_indices_x)
+sgtitle('Averaged Simulated States, EKF', 'FontSize', 14, 'Interpreter', 'latex')
+
+
 % noisy simulated data + corresponding KF estimation
 figure()
 plot_KF(tarr, y_truth_sim(:,:,5), y_all(:,:,5), yunits, wrap_indices_y)
 sgtitle('Simulated Measurements, EKF','FontSize',14, 'Interpreter','latex')
+
+% Calculate the averages across all runs for measurements
+y_truth_avg = mean(y_truth_sim, 3); % Mean along the 3rd dimension
+y_avg = mean(y_all, 3); % Mean along the 3rd dimension
+
+% Plot the averaged results for measurements
+figure()
+plot_KF(tarr, y_truth_avg, y_avg, yunits, wrap_indices_y)
+sgtitle('Averaged Simulated Measurements, EKF', 'FontSize', 14, 'Interpreter', 'latex')
+
 
 %% NEES test for EKF
 xhat_plus = xhat_all; % Is this correct for EKF version?
@@ -465,7 +485,7 @@ alpha_NEES = 0.05;
 
 %% NIS test for EKF
 alpha_NIS = alpha_NEES;
-[did_pass_NIS,too_many_inside_NIS,fig_handle_NIS] = NIS(innovation_all,Sk_all,alpha_NIS,1);
+%[did_pass_NIS,too_many_inside_NIS,fig_handle_NIS] = NIS(innovation_all,Sk_all,alpha_NIS,1);
 % Inputs:
 % - total measurement state yhat(k) = ynom(k) + dyhat(k)
 % - ytruth, yhat_plus = p x length of time array x N
@@ -696,11 +716,13 @@ function Cbar = compute_Cbar(x)
         (x5-x2)/abv  (x1-x4)/abv  0  (x2-x5)/abv  (x4-x1)/abv  -1;...
         0  0  0  1  0  0;...
         0  0  0  0  1  0];
+
+    
 end
 
 
 
-function y = compute_H(x)
+function y = compute_Y(x)
     % Extract state variables
     x1 = x(1); % xi_g
     x2 = x(2); % eta_g
