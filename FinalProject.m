@@ -197,7 +197,10 @@ for m = 1:MC_num % for each MC iteration
     % Also simulate corresponding measurements to use as "truth" for NIS 
     % test and as input to KF filter.
     xtrue0 = mvnrnd(xnom_t0,P0)'; % sample initial state % not sure if this is right!!    
-      
+    x_truth_sim(:,1,m) = xtrue0;
+    for k=2:length(tarr)
+        t1 = tarr(k-1);
+        t2 = tarr(k);
         %%simulate process noise and add to actual state
         wk = mvnrnd(zeros(1,6),Q)';
         %F_t = squeeze(F(:,:,k));
@@ -206,16 +209,16 @@ for m = 1:MC_num % for each MC iteration
         % use ode45 for this (according to prof)
         %%%dx_truth_sim(:,k,m) = F_t*dx_truth_sim(:,k-1,m) + G_t*du(:,k-1) + wk; 
         my_ode = @(t,y) NL_ode(t,y,v_g0,phi_g0,v_a0,omega_a0,wk(1:3),wk(4:6),L);
-        [t,x] = ode45(my_ode,tarr,xtrue0);
-        x_truth_sim(:,:,m) = x';
+        [t,x] = ode45(my_ode,[t1 t2],x_truth_sim(:,k-1,m));
+        x_truth_sim(:,k,m) = x(end,:)';
 
         % simulate measurement noise and add to sensor data
         vk = mvnrnd(zeros(1,size(ydata,1)),R)';
-        y_truth_sim(:,:,m) = calc_obs_from_state(x_truth_sim(:,:,m),vk);
+        y_truth_sim(:,k,m) = calc_obs_from_state(x_truth_sim(:,k,m),vk);
         %H_t = squeeze(H(:,:,k));
         %M_t = squeeze(M(:,:,k));
         %y_truth_sim(:,:,m) = H_t*dx_truth_sim(:,k,m) + M_t*du(:,k) + vk; 
-   
+    end
     
     % ----------------
     % Next, use the simulated "truth" measurements as inputs to KF
