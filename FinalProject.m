@@ -7,6 +7,8 @@ clear;
 clc
 close all
 
+rng(50)
+
 %% Parts I, Problems 1 and 2.
 
 % ---- nominal conditions -----
@@ -343,24 +345,27 @@ end
 
 % Initialization
 Pk_plus_all = zeros(6, 6, length(tarr), MC_num); % State covariance
+Sk_all = zeros(5, 5, length(tarr), MC_num);
 y_KF = zeros(5, length(tarr), MC_num); % Predicted measurements
 xhat_all = zeros(6, length(tarr), MC_num); % Final state estimate
-y_all = zeros(5, length(tarr), MC_num); % Actual measurements
+y_act = zeros(5, length(tarr), MC_num); % Actual measurements
+
+x_truth_sim=zeros(6,length(tarr), MC_num);
+y_truth_sim = zeros(5, length(tarr),MC_num);
 
 for m = 1:MC_num % Monte Carlo iterations
 
     % Simulate truth state for NEES and NIS tests
-    xtrue0 = mvnrnd(xnom_t0, P0)'; % initial state
-    wk = mvnrnd(zeros(1, 6), Q)'; 
+    xtrue0 = mvnrnd(xnom_t0, Q)'; % initial state (used to be P0)
+    x_truth_sim(:,1,m)= xtrue0;
 
-    [~, x_truth] = ode45(@(t, y) NL_ode(t, y, v_g0, phi_g0, v_a0, omega_a0, wk(1:3), wk(4:6), L), tarr, xtrue0);
-    x_truth_sim(:, :, m) = x_truth'; %to match dimensions
+    %[~, x_truth] = ode45(@(t, y) NL_ode(t, y, v_g0, phi_g0, v_a0, omega_a0, wk(1:3), wk(4:6), L), tarr, xtrue0);
+    %x_truth_sim(:, :, m) = x_truth'; %to match dimensions
 
     % Simulate measurements
-    vk = mvnrnd(zeros(1, 5), R)'; % Measurement noise
-    for k = 1:length(tarr)
-        y_truth_sim(:, k, m) = calc_obs_from_state(x_truth_sim(:, k, m), vk);
-    end
+    %for k = 1:length(tarr)
+    %    y_truth_sim(:, k, m) = calc_obs_from_state(x_truth_sim(:, k, m), vk);
+    %end
 
     % Initialize EKF
     xhat = zeros(6, length(tarr)); 
@@ -370,7 +375,25 @@ for m = 1:MC_num % Monte Carlo iterations
     Pk_all = zeros(6, 6, length(tarr)); 
     Pk_all(:, :, 1) = Pk;
 
+    yhat = zeros(5,length(tarr));
+    innovation = zeros(5,length(tarr));
+    Sk_collect = zeros(5,5,length(tarr));
+
+
     for k = 2:length(tarr)
+
+        t1 = tarr(k-1);
+        t2 = tarr(k);
+
+        wk = mvnrnd(zeros(1, 6), Q)'; 
+        vk = mvnrnd(zeros(1, 5), R)'; % Measurement noise
+
+        my_ode = @(t,y) NL_ode(t,y,v_g0,phi_g0,v_a0,omega_a0,wk(1:3),wk(4:6),L);
+        [t,x] = ode45(my_ode,[t1 t2],x_truth_sim(:,k-1,m)); % need to add in wk?
+        x_truth_sim(:,k,m) = x(end,:)';
+
+        y_truth_sim(:,k,m) = calc_obs_from_state(x_truth_sim(:,k,m),vk);
+
 
         % Calculate Jacobians for each time step using current state
         Abar_k = compute_Abar(xhat(:, k-1), unom(:, k-1)); %does unom change? no
@@ -381,7 +404,7 @@ for m = 1:MC_num % Monte Carlo iterations
         Omegatild_k = dt * eye(6);   %does this need to change per timestep? No
 
         % Compute Q_k dynamically
-        Q_k = 4000000*Q; % need to figure out how to change this at every time step
+        Q_k = Q; % need to figure out how to change this at every time step
     
         %EKF prediction
         % From lecture notes: assume wk=0
@@ -418,10 +441,10 @@ for m = 1:MC_num % Monte Carlo iterations
         % Save results
         xhat(:, k) = xhat_plus;
         Pk_all(:, :, k) = Pk_plus;
-        y_KF(:, k, m) = predicted_y;
-        %ey_KF(:, k, m) = Htild_k * xhat_minus; % Predicted measurements
+        yhat(:,k) = predicted_y;
+        %ey_KF(:, :, k) = Htild_k * xhat_minus; % Predicted measurements
         innovation(:,k) = ey_k;
-        Sk(:,:,k) = Skval;
+        Sk_collect(:,:,k) = Skval;
 
         
 
@@ -429,13 +452,14 @@ for m = 1:MC_num % Monte Carlo iterations
 
     % Save results for this Monte Carlo iteration
     Pk_plus_all(:, :, :, m) = Pk_all;
-    y_all(:, :, m) = dy_KF(:,:,m);
+    y_all(:, :, m) = yhat;
     xhat_all(:, :, m) = xhat;
     innovation_all(:,:,m) = innovation;
-    Sk_all(:,:,:,m) = Sk;
+    Sk_all(:,:,:,m) = Sk_collect;
 
     
 end
+
 
 %% Plots for Problem 5a/EFK
 % Plots for a single ‘typical’ simulation instance, showing the noisy simulated ground truth
@@ -446,29 +470,24 @@ figure()
 plot_KF(tarr,x_truth_sim(:,:,5), xhat_all(:,:,5), xunits, wrap_indices_x)
 sgtitle('Simulated States, EKF','FontSize',14, 'Interpreter','latex')
 
-% Calculate the averages across all runs
-xhat_avg = mean(xhat_all, 3); % Mean along the 3rd dimension
-x_truth_avg = mean(x_truth_sim, 3); % Mean along the 3rd dimension
-
-% Plot the averaged results
-figure()
-plot_KF(tarr, x_truth_avg, xhat_avg, xunits, wrap_indices_x)
-sgtitle('Averaged Simulated States, EKF', 'FontSize', 14, 'Interpreter', 'latex')
-
-
 % noisy simulated data + corresponding KF estimation
 figure()
 plot_KF(tarr, y_truth_sim(:,:,5), y_all(:,:,5), yunits, wrap_indices_y)
 sgtitle('Simulated Measurements, EKF','FontSize',14, 'Interpreter','latex')
 
-% Calculate the averages across all runs for measurements
-y_truth_avg = mean(y_truth_sim, 3); % Mean along the 3rd dimension
-y_avg = mean(y_all, 3); % Mean along the 3rd dimension
 
-% Plot the averaged results for measurements
-figure()
-plot_KF(tarr, y_truth_avg, y_avg, yunits, wrap_indices_y)
-sgtitle('Averaged Simulated Measurements, EKF', 'FontSize', 14, 'Interpreter', 'latex')
+% Plot ground truth positions
+figure();
+hold on;
+plot(x_truth_sim(1,:,1), x_truth_sim(2,:,1), 'b', x_truth_sim(4,:,1), x_truth_sim(5,:,1), 'r');
+% Add initial & final points
+plot(x_truth_sim(1,1,1), x_truth_sim(2,1,1), 'bo', x_truth_sim(4,1,1), x_truth_sim(5,1,1), 'ro');
+plot(x_truth_sim(1,end,1), x_truth_sim(2,end,1), 'bx', x_truth_sim(4,end,1), x_truth_sim(5,end,1), 'rx');
+hold off;
+xlabel('$\xi$ (m)', 'Interpreter', 'latex');
+ylabel('$\eta$ (m)', 'Interpreter', 'latex');
+legend('Ground Vehicle', 'Air Vehicle');
+title('GT Ground and Air Vehicle Positions');
 
 
 %% NEES test for EKF
@@ -485,7 +504,7 @@ alpha_NEES = 0.05;
 
 %% NIS test for EKF
 alpha_NIS = alpha_NEES;
-%[did_pass_NIS,too_many_inside_NIS,fig_handle_NIS] = NIS(innovation_all,Sk_all,alpha_NIS,1);
+[did_pass_NIS,too_many_inside_NIS,fig_handle_NIS] = NIS(innovation_all,Sk_all,alpha_NIS,1);
 % Inputs:
 % - total measurement state yhat(k) = ynom(k) + dyhat(k)
 % - ytruth, yhat_plus = p x length of time array x N
