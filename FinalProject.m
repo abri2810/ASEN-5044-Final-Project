@@ -423,6 +423,8 @@ for m = 1:MC_num % Monte Carlo iterations
         Htild_k = compute_Cbar(xhat_minus); % I believe this is the same as dh/dx from Lecture 32 slide 7
 
         ey_k = y_truth_sim(:, k, m) - predicted_y; % Actual measurements - predicted  
+        ey_k(1) = wrapToPi(ey_k(1));
+        ey_k(3) = wrapToPi(ey_k(3));
         
         %Do we need this? It's not in the slides. I believe the ey_k above
         %captures the innovation.
@@ -472,7 +474,7 @@ sgtitle('Simulated States, EKF','FontSize',14, 'Interpreter','latex')
 
 % noisy simulated data + corresponding KF estimation
 figure()
-plot_KF(tarr, y_truth_sim(:,:,5), y_all(:,:,5), yunits, wrap_indices_y)
+plot_KF(tarr(2:end), y_truth_sim(:,2:end,5), y_all(:,2:end,5), yunits, wrap_indices_y)
 sgtitle('Simulated Measurements, EKF','FontSize',14, 'Interpreter','latex')
 
 
