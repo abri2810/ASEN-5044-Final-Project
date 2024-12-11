@@ -153,15 +153,26 @@ sgtitle('Full Nonlinear Measurements','FontSize',14, 'Interpreter','latex')
 %   ^ This line of code isn't compatible with matlab 2024a, had to change it!
 figure(Visible="off")
 plot_states(tarr,state_perturbed_ode-full_state,xunits,wrap_indices_x)
-sgtitle('States vs. Time, ODE Minus Linearization','FontSize',14, 'Interpreter','latex')
+sgtitle('Nonlinear States Minus Linearized States','FontSize',14, 'Interpreter','latex')
 
 % plot measurements from ode minus measurements, linearized
 %fig7 = figure('units','normalized','outerposition',[0 1 .5 1]);
 %   ^ This line of code isn't compatible with matlab 2024a, had to change it!
 figure(Visible="off")
 plot_states(tarr,y_ode-y_linearized,dyunits,[1,3])
-sgtitle('ODE Measurements Minus Linearization Measurements','FontSize',14, 'Interpreter','latex')
+sgtitle('Nonlinear Measurements Minus Linearization Measurements','FontSize',14, 'Interpreter','latex')
 
+
+% More plots!
+% comparing linear states with nonlinear states (just plotting both
+% together) 
+figure(Visible="off")
+plot_both_states(tarr,state_perturbed_ode,full_state,xunits,wrap_indices_x)
+sgtitle('Nonlinear and Linearized States','FontSize',14, 'Interpreter','latex')
+
+figure(Visible="on")
+plot_both_states(tarr,y_ode,y_linearized,yunits,[1,3])
+sgtitle('Nonlinear and Linearized Measurements','FontSize',14, 'Interpreter','latex')
 
 %% Part II, Problem 4. 
 
@@ -192,6 +203,10 @@ dy_KF = zeros(5, length(tarr),MC_num); % dy given by KF
 % dy_truth_sim = zeros(5, length(tarr),MC_num); % simulated measurement perturbations
 y_truth_sim = zeros(5, length(tarr),MC_num); % ynom + noisy_dy
 y_all = zeros(5, length(tarr),MC_num); % y given by KF
+
+% initialize error bounds
+xsigmas_all = zeros(6,length(tarr), MC_num);
+ysigmas_all = zeros(6,length(tarr), MC_num);
 
 for m = 1:MC_num % for each MC iteration
     % ----------------
@@ -236,6 +251,8 @@ for m = 1:MC_num % for each MC iteration
     P0 = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
     Pk = zeros(6,6,length(tarr));
     Pk(:,:,1) = P0;
+    xsigmas = zeros(6,length(tarr));
+    ysigmas = zeros(6,length(tarr));
 
     for k = 2:length(tarr) % for each timestep k 
         % must re-calculate F, G, H, Omega at each timestep! These are not
@@ -274,7 +291,25 @@ for m = 1:MC_num % for each MC iteration
         Sk(:,:,k) = Skval;
         innovation(:,k) = innovation_k;
 
+        % extract 2sigma values
+        xsigma1 = 2*sqrt(Pk(1,1,k));
+        xsigma2 = 2*sqrt(Pk(2,2,k));
+        xsigma3 = 2*sqrt(Pk(3,3,k));
+        xsigma4 = 2*sqrt(Pk(4,4,k));
+        xsigma5 = 2*sqrt(Pk(5,5,k));
+        xsigma6 = 2*sqrt(Pk(6,6,k));
+        xsigmas(:,k) = [xsigma1;xsigma2;xsigma3;xsigma4;xsigma5;xsigma6];
+
+        ysigma1 = 2*sqrt(Sk(1,1,k));
+        ysigma2 = 2*sqrt(Sk(2,2,k));
+        ysigma3 = 2*sqrt(Sk(3,3,k));
+        ysigma4 = 2*sqrt(Sk(4,4,k));
+        ysigma5 = 2*sqrt(Sk(5,5,k));
+        ysigma6 = 2*sqrt(Sk(6,6,k));
+        ysigmas(:,k) = [ysigma1;ysigma2;ysigma3;ysigma4;ysigma5;ysigma6];
     end
+    xsigmas_all(:,:,m) = xsigmas;
+    ysigmas_all(:,:,m) = ysigmas;
     dxhat_all(:,:,m) = dxhat;
     Pk_plus_all(:,:,:,m) = Pk;
     dy_KF(:,:,m) = dyhat;
@@ -290,12 +325,12 @@ end
     % just picking monte carlo iteration #5 arbitrarily as the one to plot
 % noisy simulated ground truth states + corresponding KF estimation 
 figure()
-plot_KF(tarr,x_truth_sim(:,:,5), xhat_all(:,:,5), xunits, wrap_indices_x)
+plot_KF(tarr, x_truth_sim(:,:,5), xhat_all(:,:,5), xsigmas_all(:,:,5), xunits, wrap_indices_x)
 sgtitle('Simulated States, Linearized KF','FontSize',14, 'Interpreter','latex')
 
 % noisy simulated data + corresponding KF estimation
 figure()
-plot_KF(tarr, y_truth_sim(:,:,5), y_all(:,:,5), yunits, wrap_indices_y)
+plot_KF(tarr, y_truth_sim(:,:,5), y_all(:,:,5), xsigmas_all(:,:,5), yunits, wrap_indices_y)
 sgtitle('Simulated Measurements, Linearized KF','FontSize',14, 'Interpreter','latex')
 
 
@@ -636,10 +671,31 @@ function plot_states(tarr,state,ylabels,wrap_indices)
 
 end
 
+% ------ Another Plotting Function ---------
+function plot_both_states(tarr,state1,state2,ylabels,wrap_indices)
+% plot the states using subplots
+    for iw = 1:length(wrap_indices)
+        state1(wrap_indices(iw),:)= mod(state1(wrap_indices(iw),:)+pi,2*pi)-pi;  
+        state2(wrap_indices(iw),:)= mod(state2(wrap_indices(iw),:)+pi,2*pi)-pi;  
+    end
+
+    for i=1:size(state1,1)
+        subplot(size(state1,1),1,i)
+        plot(tarr,state1(i,:),'Color','blue','LineWidth',1.5)
+        hold on
+        plot(tarr,state2(i,:),'--','Color','red','LineWidth',1.5)
+        ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
+        xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
+        grid on
+        legend('Nonlinear','Linearized','FontSize',12,'Interpreter','latex')
+    end
+
+end
+
 
 % ------ KALMAN FILTER PLOTTING FUNCTION -------
 
-function plot_KF(tarr,sim_state,KF_state,ylabels,wrap_indices)
+function plot_KF(tarr,sim_state,KF_state, sigmas, ylabels,wrap_indices)
 % plot the states using subplots
     for iw = 1:length(wrap_indices)
         sim_state(wrap_indices(iw),:)= mod(sim_state(wrap_indices(iw),:)+pi,2*pi)-pi;  
@@ -651,10 +707,16 @@ function plot_KF(tarr,sim_state,KF_state,ylabels,wrap_indices)
         plot(tarr,sim_state(i,:),'Color','blue','LineWidth',1.5)
         hold on
         plot(tarr,KF_state(i,:),'Color','red','LineWidth',1.5)
+        hold on
+        plot(tarr, KF_state(i,:) + sigmas(i,:),'--','Color','black','LineWidth',1.5)
+        hold on
+        plot(tarr, KF_state(i,:) - sigmas(i,:),'--','Color','black','LineWidth',1.5)
+
         ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
+
         grid on
-        legend('Simulated ground truth', 'KF output')
+        legend('Simulated ground truth', 'KF output','$2\sigma$ Error Bound','$2\sigma$ Error Bound','Interpreter','latex')
     end
 
 end
