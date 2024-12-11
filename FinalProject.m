@@ -526,8 +526,6 @@ for m = 1:MC_num % Monte Carlo iterations
     ysigmas_all(:,:,m) = ysigmas;
 
     sigmas_all(:,:,:,m) = sigmas_collect;
-
-
     
 end
 
@@ -802,8 +800,8 @@ function plot_error(tarr,error,sigmas_all, ylabels)
         %legend('Error')
         sgtitle('State Error Estimate')
     end
-
 end
+
 
 %% Observations Calculation Functions
 % ------- with noise --------
