@@ -387,6 +387,7 @@ Sk_all = zeros(5, 5, length(tarr), MC_num);
 y_KF = zeros(5, length(tarr), MC_num); % Predicted measurements
 xhat_all = zeros(6, length(tarr), MC_num); % Final state estimate
 y_act = zeros(5, length(tarr), MC_num); % Actual measurements
+sigmas_all = zeros(6, 6, length(tarr), MC_num);
 
 x_truth_sim=zeros(6,length(tarr), MC_num);
 y_truth_sim = zeros(5, length(tarr),MC_num);
@@ -410,7 +411,7 @@ for m = 1:MC_num % Monte Carlo iterations
 
     % Initialize EKF
     xhat = zeros(6, length(tarr)); 
-    xhat(:, 1) = xnom_t0; % Initial state estimate
+    xhat(:, 1) = xtrue0; % Initial state estimate
 
     Pk = P0; %or identity matrix eye(6) as an initial guess?
     Pk_all = zeros(6, 6, length(tarr)); 
@@ -421,6 +422,8 @@ for m = 1:MC_num % Monte Carlo iterations
     Sk_collect = zeros(5,5,length(tarr));
    
 
+    sigmas_collect = zeros(6,6,length(tarr));
+    sigmas_collect(:,:,1) = diag([2*sqrt(P0(1,1)) 2*sqrt(P0(2,2)) 2*sqrt(P0(3,3)) 2*sqrt(P0(4,4)) 2*sqrt(P0(5,5)) 2*sqrt(P0(6,6))]);
 
     for k = 2:length(tarr)
 
@@ -481,6 +484,8 @@ for m = 1:MC_num % Monte Carlo iterations
         xhat_plus = xhat_minus + Kk * ey_k;
         Pk_plus = (eye(6) - Kk * Htild_k) * Pk_minus;
 
+
+
     
         % Save results
         xhat(:, k) = xhat_plus;
@@ -489,6 +494,8 @@ for m = 1:MC_num % Monte Carlo iterations
         %ey_KF(:, :, k) = Htild_k * xhat_minus; % Predicted measurements
         innovation(:,k) = ey_k;
         Sk_collect(:,:,k) = Skval;
+        sigmas_collect(:,:,k) = diag([2*sqrt(Pk_plus(1,1)) 2*sqrt(Pk_plus(2,2)) 2*sqrt(Pk_plus(3,3)) 2*sqrt(Pk_plus(4,4)) 2*sqrt(Pk_plus(5,5)) 2*sqrt(Pk_plus(6,6))]);
+
 
         % extract 2sigma values
         xsigma1 = 2*sqrt(Pk_all(1,1,k));
@@ -514,10 +521,15 @@ for m = 1:MC_num % Monte Carlo iterations
     xhat_all(:, :, m) = xhat;
     innovation_all(:,:,m) = innovation;
     Sk_all(:,:,:,m) = Sk_collect;
+
     xsigmas_all(:,:,m) = xsigmas;
     ysigmas_all(:,:,m) = ysigmas;
+
     
 end
+
+% error1 = y_truth_sim(:,2:end,5)-y_all(:,2:end,5);
+% error1(1,:)
 
 
 %% Plots for Problem 5a/EKF
@@ -533,6 +545,12 @@ sgtitle('Simulated States, EKF','FontSize',14, 'Interpreter','latex')
 figure()
 plot_KF(tarr(2:end), y_truth_sim(:,2:end,5), y_all(:,2:end,5), ysigmas_all(:,2:end,5), yunits, wrap_indices_y)
 sgtitle('Simulated Measurements, EKF','FontSize',14, 'Interpreter','latex')
+
+% plot errors
+figure()
+error1 = x_truth_sim(:,:,5)-xhat_all(:,:,5);
+plot_error(tarr, error1,sigmas_all, xunits)
+
 
 
 % Plot ground truth positions
@@ -759,8 +777,34 @@ function plot_KF(tarr,sim_state,KF_state, sigmas, ylabels,wrap_indices)
 
 end
 
+
 %% Observations Calculation Functions
 % ------- with noise --------
+
+function plot_error(tarr,error,sigmas_all, ylabels)
+% plot the states using subplots
+    % for iw = 1:length(wrap_indices)
+    %     sim_state(wrap_indices(iw),:)= mod(sim_state(wrap_indices(iw),:)+pi,2*pi)-pi;  
+    %     KF_state(wrap_indices(iw),:)= mod(KF_state(wrap_indices(iw),:)+pi,2*pi)-pi; 
+    % end
+
+    for i=1:size(error,1)
+        subplot(size(error,1),1,i)
+        sigma_plus = error(i,:) + squeeze(sigmas_all(i,i,:,5))';
+        sigma_minus = error(i,:) - squeeze(sigmas_all(i,i,:,5))';
+        hold on
+        plot(tarr,error(i,:),'Color','blue','LineWidth',.5)
+        plot(tarr, sigma_plus,"Color",'r', 'LineStyle', '--')
+        plot(tarr, sigma_minus, 'Color','r', 'LineStyle', '--')
+        hold off
+        ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
+        xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
+        grid on
+        %legend('Error')
+        sgtitle('State Error Estimate')
+    end
+end
+
 function y = calc_obs_from_state(x,vtilde)
     x1 = x(1,:);
     x2 = x(2,:);
