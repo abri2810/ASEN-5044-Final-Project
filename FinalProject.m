@@ -388,6 +388,9 @@ y_act = zeros(5, length(tarr), MC_num); % Actual measurements
 x_truth_sim=zeros(6,length(tarr), MC_num);
 y_truth_sim = zeros(5, length(tarr),MC_num);
 
+% initialize error bounds
+    xsigmas_all = zeros(6,length(tarr), MC_num);
+    ysigmas_all = zeros(5,length(tarr), MC_num);
 for m = 1:MC_num % Monte Carlo iterations
 
     % Simulate truth state for NEES and NIS tests
@@ -413,9 +416,7 @@ for m = 1:MC_num % Monte Carlo iterations
     yhat = zeros(5,length(tarr));
     innovation = zeros(5,length(tarr));
     Sk_collect = zeros(5,5,length(tarr));
-    % initialize error bounds
-    xsigmas_all = zeros(6,length(tarr), MC_num);
-    ysigmas_all = zeros(5,length(tarr), MC_num);
+   
 
 
     for k = 2:length(tarr)
@@ -527,7 +528,7 @@ sgtitle('Simulated States, EKF','FontSize',14, 'Interpreter','latex')
 
 % noisy simulated data + corresponding KF estimation
 figure()
-plot_KF(tarr(2:end), y_truth_sim(:,2:end,5), y_all(:,2:end,5), xsigmas_all(:,2:end,5), yunits, wrap_indices_y)
+plot_KF(tarr(2:end), y_truth_sim(:,2:end,5), y_all(:,2:end,5), ysigmas_all(:,2:end,5), yunits, wrap_indices_y)
 sgtitle('Simulated Measurements, EKF','FontSize',14, 'Interpreter','latex')
 
 
