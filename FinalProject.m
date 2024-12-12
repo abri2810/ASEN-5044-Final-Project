@@ -206,7 +206,7 @@ y_all = zeros(5, length(tarr),MC_num); % y given by KF
 
 % initialize error bounds
 xsigmas_all = zeros(6,length(tarr), MC_num);
-ysigmas_all = zeros(6,length(tarr), MC_num);
+ysigmas_all = zeros(5,length(tarr), MC_num);
 
 for m = 1:MC_num % for each MC iteration
     % ----------------
@@ -252,7 +252,7 @@ for m = 1:MC_num % for each MC iteration
     Pk = zeros(6,6,length(tarr));
     Pk(:,:,1) = P0;
     xsigmas = zeros(6,length(tarr));
-    ysigmas = zeros(6,length(tarr));
+    ysigmas = zeros(5,length(tarr));
 
     for k = 2:length(tarr) % for each timestep k 
         % must re-calculate F, G, H, Omega at each timestep! These are not
@@ -305,8 +305,8 @@ for m = 1:MC_num % for each MC iteration
         ysigma3 = 2*sqrt(Sk(3,3,k));
         ysigma4 = 2*sqrt(Sk(4,4,k));
         ysigma5 = 2*sqrt(Sk(5,5,k));
-        ysigma6 = 2*sqrt(Sk(6,6,k));
-        ysigmas(:,k) = [ysigma1;ysigma2;ysigma3;ysigma4;ysigma5;ysigma6];
+        %ysigma6 = 2*sqrt(Sk(6,6,k));
+        ysigmas(:,k) = [ysigma1;ysigma2;ysigma3;ysigma4;ysigma5];%;ysigma6];
     end
     xsigmas_all(:,:,m) = xsigmas;
     ysigmas_all(:,:,m) = ysigmas;
