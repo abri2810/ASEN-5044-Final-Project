@@ -407,7 +407,7 @@ for m = 1:MC_num % Monte Carlo iterations
     xhat = zeros(6, length(tarr)); 
     xhat(:, 1) = xtrue0; % Initial state estimate
 
-    Pk = P0; %or identity matrix eye(6) as an initial guess?
+    Pk = diag([300 300 300 300 300 300]); 
     Pk_all = zeros(6, 6, length(tarr)); 
     Pk_all(:, :, 1) = Pk;
 
@@ -515,12 +515,12 @@ end
     % just picking monte carlo iteration #5 arbitrarily as the one to plot
 % noisy simulated ground truth states + corresponding KF estimation 
 figure()
-plot_KF(tarr,x_truth_sim(:,:,5), xhat_all(:,:,5), xunits, wrap_indices_x)
+plot_EKF(tarr,x_truth_sim(:,:,5), xhat_all(:,:,5), xunits, wrap_indices_x)
 sgtitle('Simulated States, EKF','FontSize',14, 'Interpreter','latex')
 
 % noisy simulated data + corresponding KF estimation
 figure()
-plot_KF(tarr(2:end), y_truth_sim(:,2:end,5), y_all(:,2:end,5), yunits, wrap_indices_y)
+plot_EKF(tarr(2:end), y_truth_sim(:,2:end,5), y_all(:,2:end,5), yunits, wrap_indices_y)
 sgtitle('Simulated Measurements, EKF','FontSize',14, 'Interpreter','latex')
 
 % plot errors
@@ -738,6 +738,26 @@ function plot_KF(tarr,sim_state,KF_state, sigmas, ylabels,wrap_indices)
 
 end
 
+function plot_EKF(tarr,sim_state,KF_state,ylabels,wrap_indices)
+% plot the states using subplots
+    for iw = 1:length(wrap_indices)
+        sim_state(wrap_indices(iw),:)= mod(sim_state(wrap_indices(iw),:)+pi,2*pi)-pi;  
+        KF_state(wrap_indices(iw),:)= mod(KF_state(wrap_indices(iw),:)+pi,2*pi)-pi; 
+    end
+
+    for i=1:size(sim_state,1)
+        subplot(size(sim_state,1),1,i)
+        plot(tarr,sim_state(i,:),'Color','blue','LineWidth',1.5)
+        hold on
+        plot(tarr,KF_state(i,:),'Color','red','LineWidth',1.5)
+        ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
+        xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
+        grid on
+        legend('Simulated ground truth', 'KF output')
+    end
+
+end
+
 function plot_error(tarr,error,sigmas_all, ylabels)
 % plot the states using subplots
     % for iw = 1:length(wrap_indices)
@@ -757,7 +777,7 @@ function plot_error(tarr,error,sigmas_all, ylabels)
         ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
         grid on
-        %legend('Error')
+        legend('KF output error','$2\sigma$ Error Bound','$2\sigma$ Error Bound','Interpreter','latex')
         sgtitle('State Error Estimate')
     end
 
