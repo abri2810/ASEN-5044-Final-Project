@@ -210,30 +210,16 @@ y_all = zeros(5, length(tarr),MC_num); % y given by KF
 xsigmas_all = zeros(6,length(tarr), MC_num);
 ysigmas_all = zeros(5,length(tarr), MC_num);
 
-
 % TUNING THE Q MATRIX
     % manually adjusting based on error plots and NEES plots
-Q_KF = diag([1e8, 1e8, 1e1, 1e3, 1e3, 1e1]);
+Q_KF = diag([1e4, 1e3, 1e0, 1e1, 1e1, 1e0]);
 
 
 for m = 1:MC_num % for each MC iteration
-    % ----------------
-    % First, simulate truth state as "truth" for the NEES  test.
-        % Also simulate corresponding measurements to use as "truth" for NIS 
-        % test and as input to KF filter.
-    xtrue0 = mvnrnd(xnom_t0,P0)'; % sample initial state % not sure if this is right!!    
-      
-        % simulate process noise 
-        wk = mvnrnd(zeros(1,6),Q)';
-        
-        % use ode45 for the true truth state 
-        my_ode = @(t,y) NL_ode(t,y,v_g0,phi_g0,v_a0,omega_a0,wk(1:3),wk(4:6),L);
-        [t,x] = ode45(my_ode,tarr,xtrue0);
-        x_truth_sim(:,:,m) = x';
-
-        % simulate measurement noise and add it to sensor data
-        vk = mvnrnd(zeros(1,size(ydata,1)),R)';
-        y_truth_sim(:,:,m) = calc_obs_from_state(x_truth_sim(:,:,m),vk);
+    % --------------- 
+    % Simulate truth state for NEES and NIS tests
+    xtrue0 = mvnrnd(xnom_t0, Q)'; % initial state
+    x_truth_sim(:,1,m)= xtrue0;
     
     % ----------------
     % Next, use the simulated "truth" measurements as inputs to KF
@@ -252,12 +238,27 @@ for m = 1:MC_num % for each MC iteration
     P0 = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
     Pk = zeros(6,6,length(tarr));
     Pk(:,:,1) = P0;
+
     xsigmas = zeros(6,length(tarr));
     ysigmas = zeros(5,length(tarr));
+    xsigmas(:,1) = [2*sqrt(P0(1,1)); 2*sqrt(P0(2,2)); 2*sqrt(P0(3,3)); 2*sqrt(P0(4,4)); 2*sqrt(P0(5,5)); 2*sqrt(P0(6,6))];
 
     for k = 2:length(tarr) % for each timestep k 
+
+        t1 = tarr(k-1);
+        t2 = tarr(k);
+
+        wk = mvnrnd(zeros(1, 6), Q)'; 
+        vk = mvnrnd(zeros(1, 5), R)'; % Measurement noise
+
+        my_ode = @(t,y) NL_ode(t,y,v_g0,phi_g0,v_a0,omega_a0,wk(1:3),wk(4:6),L);
+        [t,x] = ode45(my_ode,[t1 t2],x_truth_sim(:,k-1,m)); % need to add in wk?
+        x_truth_sim(:,k,m) = x(end,:)';
+
+        y_truth_sim(:,k,m) = calc_obs_from_state(x_truth_sim(:,k,m),vk);
+
         % must re-calculate F, G, H, Omega at each timestep! These are not
-        % the same as the F, G, H Jacobians calculated in part 1. 
+        % the same as the F, G, H Jacobians calculated in part 1.
         Ftild_k = eye(6) + dt*Abar(:,:,k-1);
         Htild_k = H(:,:,k); % H tilde = H bar = C bar
         Gtild_k = dt*Bbar(:,:,k-1);
@@ -280,7 +281,14 @@ for m = 1:MC_num % for each MC iteration
         % y* contains NO NOISE
         predicted_y = compute_Y(xnom(:,k)); % this is y*_k+1
         dy = pretend_y_data-predicted_y;
-        innovation_k = dy-Htild_k*dxhat_minus;
+        innovation_k = dy-Htild_k*dxhat_minus; 
+        % angle wrapping - rows 1 and 3 of the innovation vector
+            % due to angles being very close to pi or -pi due to atan2
+            % we want to shift the angle range to be 0 to 2pi, then
+            % subtract pi to eliminate discontinuities near +/-pi
+        padding = 1e-6; % tiny tolerance
+        innovation_k(1) = mod(innovation_k(1) + pi + padding, 2*pi) - pi - padding;
+        innovation_k(3) = mod(innovation_k(3) + pi + padding, 2*pi) - pi - padding;
         dxhat_plus = dxhat_minus + K*(innovation_k);
 
         % results of the state & covariance
@@ -338,7 +346,7 @@ plot_errors(tarr,x_truth_sim(:,:,5) - xhat_all(:,:,5),xsigmas_all(:,:,5),xunits)
 sgtitle('State Errors, Linearized KF','FontSize',14, 'Interpreter','latex')
 
 figure()
-plot_errors(tarr,y_truth_sim(:,:,5) - y_all(:,:,5),ysigmas_all(:,:,5), yunits)
+plot_errors(tarr(2:end),innovation_all(:,2:end,5),ysigmas_all(:,2:end,5), yunits)
 sgtitle('Measurement Errors, Linearized KF','FontSize',14, 'Interpreter','latex')
 %% NEES test
 xhat_plus = repmat(xnom,1,1,MC_num) + dxhat_all;
@@ -424,7 +432,6 @@ for m = 1:MC_num % Monte Carlo iterations
     innovation = zeros(5,length(tarr));
     Sk_collect = zeros(5,5,length(tarr));
    
-
     sigmas_collect = zeros(6,6,length(tarr));
     sigmas_collect(:,:,1) = diag([2*sqrt(P0(1,1)) 2*sqrt(P0(2,2)) 2*sqrt(P0(3,3)) 2*sqrt(P0(4,4)) 2*sqrt(P0(5,5)) 2*sqrt(P0(6,6))]);
 
@@ -488,8 +495,6 @@ for m = 1:MC_num % Monte Carlo iterations
         Pk_plus = (eye(6) - Kk * Htild_k) * Pk_minus;
 
 
-
-    
         % Save results
         xhat(:, k) = xhat_plus;
         Pk_all(:, :, k) = Pk_plus;
@@ -766,10 +771,10 @@ function plot_KF(tarr,sim_state,KF_state, sigmas, ylabels,wrap_indices)
         plot(tarr,sim_state(i,:),'Color','blue','LineWidth',1.5)
         hold on
         plot(tarr,KF_state(i,:),'Color','red','LineWidth',1.5)
-        hold on
-        plot(tarr, KF_state(i,:) + sigmas(i,:),'--','Color','black','LineWidth',1.5)
-        hold on
-        plot(tarr, KF_state(i,:) - sigmas(i,:),'--','Color','black','LineWidth',1.5)
+        % hold on
+        % plot(tarr, KF_state(i,:) + sigmas(i,:),'--','Color','black','LineWidth',1.5)
+        % hold on
+        % plot(tarr, KF_state(i,:) - sigmas(i,:),'--','Color','black','LineWidth',1.5)
 
         ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
