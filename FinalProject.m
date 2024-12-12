@@ -187,7 +187,6 @@ MC_num = 100; % number of monte carlo simulations
 
 % initialize covariance matrix 
     % 6x6, for each timestep, for each MC
-P0 = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
 Pk_plus_all = zeros(6,6,length(tarr),MC_num); % Pk plus
 Sk_all = zeros(5,5,length(tarr),MC_num); % Pk plus
 innovation_all = zeros(5,length(tarr),MC_num);
@@ -212,7 +211,7 @@ ysigmas_all = zeros(5,length(tarr), MC_num);
 
 % TUNING THE Q MATRIX
     % manually adjusting based on error plots and NEES plots
-Q_KF = diag([1e4, 1e3, 1e0, 1e1, 1e1, 1e0]);
+Q_KF = diag([1e5, 1e5, 1e1, 1e2, 1e2, 1e1]);
 
 
 for m = 1:MC_num % for each MC iteration
@@ -235,7 +234,8 @@ for m = 1:MC_num % for each MC iteration
     du = zeros(4,length(tarr));
     du(:,1) = du0;
 
-    P0 = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
+    % initial state covariance matrix - TUNE THIS
+    P0 = 10*diag([20 10 1 1 1 1]);
     Pk = zeros(6,6,length(tarr));
     Pk(:,:,1) = P0;
 
