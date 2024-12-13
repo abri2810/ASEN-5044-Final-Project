@@ -170,9 +170,10 @@ figure(Visible="off")
 plot_both_states(tarr,state_perturbed_ode,full_state,xunits,wrap_indices_x)
 sgtitle('Nonlinear and Linearized States','FontSize',14, 'Interpreter','latex')
 
-figure(Visible="on")
+figure(Visible="off")
 plot_both_states(tarr,y_ode,y_linearized,yunits,[1,3])
 sgtitle('Nonlinear and Linearized Measurements','FontSize',14, 'Interpreter','latex')
+
 
 %% Part II, Problem 4. 
 
@@ -185,9 +186,9 @@ MC_num = 100; % number of monte carlo simulations
 
 % initialize covariance matrix 
     % 6x6, for each timestep, for each MC
-P0 = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
 Pk_plus_all = zeros(6,6,length(tarr),MC_num); % Pk plus
-Sk_plus_all = zeros(5,5,length(tarr),MC_num); % Pk plus
+Sk_all = zeros(5,5,length(tarr),MC_num); % Pk plus
+innovation_all = zeros(5,length(tarr),MC_num);
 
 % initialize state matrix
     % 6x1, for each timestep, for each MC
@@ -207,31 +208,19 @@ y_all = zeros(5, length(tarr),MC_num); % y given by KF
 xsigmas_all = zeros(6,length(tarr), MC_num);
 ysigmas_all = zeros(5,length(tarr), MC_num);
 
-for m = 1:MC_num % for each MC iteration
-    % ----------------
-    % First, simulate truth state as "truth" for the NEES  test.
-    % Also simulate corresponding measurements to use as "truth" for NIS 
-    % test and as input to KF filter.
-    xtrue0 = mvnrnd(xnom_t0,P0)'; % sample initial state % not sure if this is right!!    
-      
-        %%simulate process noise and add to actual state
-        wk = mvnrnd(zeros(1,6),Q)';
-        %F_t = squeeze(F(:,:,k));
-        %G_t = squeeze(G(:,:,k));
-        
-        % use ode45 for this (according to prof)
-        %%%dx_truth_sim(:,k,m) = F_t*dx_truth_sim(:,k-1,m) + G_t*du(:,k-1) + wk; 
-        my_ode = @(t,y) NL_ode(t,y,v_g0,phi_g0,v_a0,omega_a0,wk(1:3),wk(4:6),L);
-        [t,x] = ode45(my_ode,tarr,xtrue0);
-        x_truth_sim(:,:,m) = x';
+% TUNING THE Q MATRIX
+    % manually adjusting based on error plots and NEES plots
+Q_KF = diag([1e5, 1e4, 1e2, 1e2, 1e2, 1e2]);
+R_KF = R;
+P0 = diag([15 25 1 7 10 1]);
 
-        % simulate measurement noise and add to sensor data
-        vk = mvnrnd(zeros(1,5),R)';
-        y_truth_sim(:,:,m) = calc_obs_from_state(x_truth_sim(:,:,m),vk);
-        %H_t = squeeze(H(:,:,k));
-        %M_t = squeeze(M(:,:,k));
-        %y_truth_sim(:,:,m) = H_t*dx_truth_sim(:,k,m) + M_t*du(:,k) + vk; 
-   
+
+for m = 1:MC_num % for each MC iteration
+    % --------------- 
+    % Simulate truth state for NEES and NIS tests
+    xtrue0 = mvnrnd(xnom_t0, Q)'; % initial state
+    x_truth_sim(:,1,m)= xtrue0;
+
     
     % ----------------
     % Next, use the simulated "truth" measurements as inputs to KF
@@ -247,15 +236,30 @@ for m = 1:MC_num % for each MC iteration
     du = zeros(4,length(tarr));
     du(:,1) = du0;
 
-    P0 = eye(6); % initial state covariance matrix (IDK WHAT TO PUT HERE SO I MADE IT IDENTITY)
+    % initial state covariance matrix
     Pk = zeros(6,6,length(tarr));
     Pk(:,:,1) = P0;
+
     xsigmas = zeros(6,length(tarr));
     ysigmas = zeros(5,length(tarr));
+    xsigmas(:,1) = [2*sqrt(P0(1,1)); 2*sqrt(P0(2,2)); 2*sqrt(P0(3,3)); 2*sqrt(P0(4,4)); 2*sqrt(P0(5,5)); 2*sqrt(P0(6,6))];
 
     for k = 2:length(tarr) % for each timestep k 
+
+        t1 = tarr(k-1);
+        t2 = tarr(k);
+
+        wk = mvnrnd(zeros(1, 6), Q)'; 
+        vk = mvnrnd(zeros(1, 5), R)'; % Measurement noise
+
+        my_ode = @(t,y) NL_ode(t,y,v_g0,phi_g0,v_a0,omega_a0,wk(1:3),wk(4:6),L);
+        [t,x] = ode45(my_ode,[t1 t2],x_truth_sim(:,k-1,m)); % need to add in wk?
+        x_truth_sim(:,k,m) = x(end,:)';
+
+        y_truth_sim(:,k,m) = calc_obs_from_state(x_truth_sim(:,k,m),vk);
+
         % must re-calculate F, G, H, Omega at each timestep! These are not
-        % the same as the F, G, H Jacobians calculated in part 1. 
+        % the same as the F, G, H Jacobians calculated in part 1.
         Ftild_k = eye(6) + dt*Abar(:,:,k-1);
         Htild_k = H(:,:,k); % H tilde = H bar = C bar
         Gtild_k = dt*Bbar(:,:,k-1);
@@ -264,23 +268,28 @@ for m = 1:MC_num % for each MC iteration
 
         % prediction step
         dxhat_minus = Ftild_k*dxhat(:,k-1) + Gtild_k*du(:,k-1);
-        Pk_minus = Ftild_k*Pk(:,:,k-1)*Ftild_k' + Omegatild_k*Q*Omegatild_k';
-        
-        % gain K
-        Skval = Htild_k*Pk_minus*Htild_k' + R;
+        Pk_minus = Ftild_k*Pk(:,:,k-1)*Ftild_k' + Omegatild_k*Q_KF*Omegatild_k';
+       
+        Skval = Htild_k*Pk_minus*Htild_k' + R_KF;
         Skval = 0.5*(Skval + Skval');
 
-        K = Pk_minus*Htild_k' * inv(Htild_k*Pk_minus*Htild_k' + R);
+        % gain K
+        K = Pk_minus*Htild_k' * inv(Htild_k*Pk_minus*Htild_k' + R_KF);
 
         % correction step
         Pk_plus = (eye(6) - K*Htild_k)*Pk_minus;
-
-        pretend_y_data = y_truth_sim(:,k,m);
-        predicted_y = ynom(:,k);
-        %dy = ydata(:,k) - y_truth_sim(:,k,m);
-        dy= pretend_y_data-predicted_y;
-        innovation_k = dy-Htild_k*dxhat_minus;
-
+        pretend_y_data = y_truth_sim(:,k,m); % this is y_k+1
+        % y* contains NO NOISE
+        predicted_y = compute_Y(xnom(:,k)); % this is y*_k+1
+        dy = pretend_y_data-predicted_y;
+        innovation_k = dy-Htild_k*dxhat_minus; 
+        % angle wrapping - rows 1 and 3 of the innovation vector
+            % due to angles being very close to pi or -pi due to atan2
+            % we want to shift the angle range to be 0 to 2pi, then
+            % subtract pi to eliminate discontinuities near +/-pi
+        padding = 1e-6; % tiny tolerance
+        innovation_k(1) = mod(innovation_k(1) + pi + padding, 2*pi) - pi - padding;
+        innovation_k(3) = mod(innovation_k(3) + pi + padding, 2*pi) - pi - padding;
         dxhat_plus = dxhat_minus + K*(innovation_k);
 
         % results of the state & covariance
@@ -304,8 +313,8 @@ for m = 1:MC_num % for each MC iteration
         ysigma3 = 2*sqrt(Sk(3,3,k));
         ysigma4 = 2*sqrt(Sk(4,4,k));
         ysigma5 = 2*sqrt(Sk(5,5,k));
-        %ysigma6 = 2*sqrt(Sk(6,6,k));
-        ysigmas(:,k) = [ysigma1;ysigma2;ysigma3;ysigma4;ysigma5];%;ysigma6];
+        ysigmas(:,k) = [ysigma1;ysigma2;ysigma3;ysigma4;ysigma5];
+
     end
     xsigmas_all(:,:,m) = xsigmas;
     ysigmas_all(:,:,m) = ysigmas;
@@ -329,10 +338,17 @@ sgtitle('Simulated States, Linearized KF','FontSize',14, 'Interpreter','latex')
 
 % noisy simulated data + corresponding KF estimation
 figure()
-plot_KF(tarr, y_truth_sim(:,:,5), y_all(:,:,5), xsigmas_all(:,:,5), yunits, wrap_indices_y)
+plot_KF(tarr, y_truth_sim(:,:,5), y_all(:,:,5), ysigmas_all(:,:,5), yunits, wrap_indices_y)
 sgtitle('Simulated Measurements, Linearized KF','FontSize',14, 'Interpreter','latex')
 
+% Plotting errors
+figure()
+plot_errors(tarr,x_truth_sim(:,:,5) - xhat_all(:,:,5),xsigmas_all(:,:,5),xunits)
+sgtitle('State Errors, Linearized KF','FontSize',14, 'Interpreter','latex')
 
+figure()
+plot_errors(tarr(2:end),innovation_all(:,2:end,5),ysigmas_all(:,2:end,5), yunits)
+sgtitle('Measurement Errors, Linearized KF','FontSize',14, 'Interpreter','latex')
 %% NEES test
 xhat_plus = repmat(xnom,1,1,MC_num) + dxhat_all;
 alpha_NEES = 0.05;
@@ -391,6 +407,11 @@ y_truth_sim = zeros(5, length(tarr),MC_num);
 xhat0_EKF = xtrue0;
 Pk0_EKF = diag([300 300 300 300 300 300]); 
 Q_EKF = Q;
+
+% initialize error bounds
+    xsigmas_all = zeros(6,length(tarr), MC_num);
+    ysigmas_all = zeros(5,length(tarr), MC_num);
+
 for m = 1:MC_num % Monte Carlo iterations
 
     % Simulate truth state for NEES and NIS tests
@@ -404,6 +425,23 @@ for m = 1:MC_num % Monte Carlo iterations
     %for k = 1:length(tarr)
     %    y_truth_sim(:, k, m) = calc_obs_from_state(x_truth_sim(:, k, m), vk);
     %end
+
+
+    % Initialize EKF
+    xhat = zeros(6, length(tarr)); 
+    xhat(:, 1) = xtrue0; % Initial state estimate
+
+    Pk = diag([300 300 300 300 300 300]); 
+    Pk_all = zeros(6, 6, length(tarr)); 
+    Pk_all(:, :, 1) = Pk;
+
+    yhat = zeros(5,length(tarr));
+    innovation = zeros(5,length(tarr));
+    Sk_collect = zeros(5,5,length(tarr));
+   
+    sigmas_collect = zeros(6,6,length(tarr));
+    sigmas_collect(:,:,1) = diag([2*sqrt(P0(1,1)) 2*sqrt(P0(2,2)) 2*sqrt(P0(3,3)) 2*sqrt(P0(4,4)) 2*sqrt(P0(5,5)) 2*sqrt(P0(6,6))]);
+
 
     for k = 2:length(tarr)
 
@@ -419,6 +457,80 @@ for m = 1:MC_num % Monte Carlo iterations
 
         y_truth_sim(:,k,m) = calc_obs_from_state(x_truth_sim(:,k,m),vk);
 
+
+
+        % Calculate Jacobians for each time step using current state
+        Abar_k = compute_Abar(xhat(:, k-1), unom(:, k-1)); %does unom change? no
+        Bbar_k = compute_Bbar(xhat(:, k-1), unom(:, k-1)); %does unom change? no
+
+        Ftild_k = eye(6) + dt * Abar_k; % State transition matrix
+        Gtild_k = dt * Bbar_k; % Input matrix. IS THIS RIGHT?
+        Omegatild_k = dt * eye(6);   %does this need to change per timestep? No
+
+        % Compute Q_k dynamically
+        Q_k = Q; % need to figure out how to change this at every time step
+    
+        %EKF prediction
+        % From lecture notes: assume wk=0
+        my_ode = @(t, y) NL_ode(t, y, unom(1, k-1), unom(2, k-1), unom(3, k-1), unom(4, k-1),zeros(3),zeros(3), L); 
+        [~, xhat_minus] = ode45(my_ode, [tarr(k-1), tarr(k)], xhat(:, k-1));
+
+        xhat_minus = xhat_minus(end, :)'; % Take last output as predicted state
+        
+    
+        % covariance 
+        Pk_minus = Ftild_k * Pk_all(:, :, k-1) * Ftild_k' + Omegatild_k * Q_k * Omegatild_k';
+   
+
+        % innovation
+        predicted_y = compute_Y(xhat_minus);
+        Htild_k = compute_Cbar(xhat_minus); % I believe this is the same as dh/dx from Lecture 32 slide 7
+
+        ey_k = y_truth_sim(:, k, m) - predicted_y; % Actual measurements - predicted  
+        ey_k(1) = wrapToPi(ey_k(1));
+        ey_k(3) = wrapToPi(ey_k(3));
+        
+        %Do we need this? It's not in the slides. I believe the ey_k above
+        %captures the innovation.
+        %innovation = y_truth_sim - Htild_k * (xhat_minus); 
+
+        % correction
+        Sk = Htild_k * Pk_minus * Htild_k' + R;
+        Skval = 0.5*(Sk + Sk'); %taken from part 4. Do we need this?
+
+        Kk = Pk_minus * Htild_k' / Sk;
+
+        xhat_plus = xhat_minus + Kk * ey_k;
+        Pk_plus = (eye(6) - Kk * Htild_k) * Pk_minus;
+
+
+        % Save results
+        xhat(:, k) = xhat_plus;
+        Pk_all(:, :, k) = Pk_plus;
+        yhat(:,k) = predicted_y;
+        %ey_KF(:, :, k) = Htild_k * xhat_minus; % Predicted measurements
+        innovation(:,k) = ey_k;
+        Sk_collect(:,:,k) = Skval;
+        sigmas_collect(:,:,k) = diag([2*sqrt(Pk_plus(1,1)) 2*sqrt(Pk_plus(2,2)) 2*sqrt(Pk_plus(3,3)) 2*sqrt(Pk_plus(4,4)) 2*sqrt(Pk_plus(5,5)) 2*sqrt(Pk_plus(6,6))]);
+
+
+        % extract 2sigma values
+        xsigma1 = 2*sqrt(Pk_all(1,1,k));
+        xsigma2 = 2*sqrt(Pk_all(2,2,k));
+        xsigma3 = 2*sqrt(Pk_all(3,3,k));
+        xsigma4 = 2*sqrt(Pk_all(4,4,k));
+        xsigma5 = 2*sqrt(Pk_all(5,5,k));
+        xsigma6 = 2*sqrt(Pk_all(6,6,k));
+        xsigmas(:,k) = [xsigma1;xsigma2;xsigma3;xsigma4;xsigma5;xsigma6];
+
+        ysigma1 = 2*sqrt(Sk_collect(1,1,k));
+        ysigma2 = 2*sqrt(Sk_collect(2,2,k));
+        ysigma3 = 2*sqrt(Sk_collect(3,3,k));
+        ysigma4 = 2*sqrt(Sk_collect(4,4,k));
+        ysigma5 = 2*sqrt(Sk_collect(5,5,k));
+        ysigmas(:,k) = [ysigma1;ysigma2;ysigma3;ysigma4;ysigma5];
+
+
     end
 
     % Initialize EKF
@@ -430,8 +542,11 @@ for m = 1:MC_num % Monte Carlo iterations
     xhat_all(:, :, m) = xhat;
     innovation_all(:,:,m) = innovation;
     Sk_all(:,:,:,m) = Sk_collect;
-    sigmas_all(:,:,:,m) = sigmas_collect;
 
+    xsigmas_all(:,:,m) = xsigmas;
+    ysigmas_all(:,:,m) = ysigmas;
+
+    sigmas_all(:,:,:,m) = sigmas_collect;
     
 end
 
@@ -439,7 +554,7 @@ end
 % error1(1,:)
 
 
-%% Plots for Problem 5a/EFK
+%% Plots for Problem 5a/EKF
 % Plots for a single ‘typical’ simulation instance, showing the noisy simulated ground truth
 % states, noisy simulated data, and resulting linearized KF state estimation errors
     % just picking monte carlo iteration #5 arbitrarily as the one to plot
@@ -457,7 +572,6 @@ sgtitle('Simulated Measurements, EKF','FontSize',14, 'Interpreter','latex')
 figure()
 error1 = x_truth_sim(:,:,5)-xhat_all(:,:,5);
 plot_error(tarr, error1,sigmas_all, xunits)
-
 
 
 % Plot ground truth positions
@@ -497,6 +611,7 @@ alpha_NIS = alpha_NEES;
 % - alpha = scalar = significance level
 % - show_plot = optional, if true then plot result
 
+
 %% Part II number 6
 % Initialization
 ydata = coopData.ydata;
@@ -529,9 +644,8 @@ plot_error(tvec, error_y,sigmas_all, yunits)
 sgtitle('Measurement Error Estimate, EKF for ydata','FontSize',14, 'Interpreter','latex')
 saveas(fig_EKF_error_yadata, 'images/EKF_error_ydata_pt6.png')
 
-%% Functions
+%% Ode45 Function
 
-% -------- ODE45 ----------
 
 function yd = NL_ode(t,y,vg,phi,va,wa,w_tild_g,w_tild_a,L)
 % full ODE for the dynamical system to be used in ODE 45
@@ -562,7 +676,7 @@ function yd = NL_ode(t,y,vg,phi,va,wa,w_tild_g,w_tild_a,L)
     yd = [xi_g_dot; etag_dot; theta_g_dot; xi_a_dot; etaa_dot; theta_a_dot];
 end
 
-% --------- CT and DT MATRICES --------
+%% CT and DT Matrices Function
 
 function [Abar,Bbar,Cbar,Dbar,F,G,H,M] = get_dynamics_matrices(xnom,unom,dt,L)
 % get matrices for the dynamical system
@@ -632,7 +746,7 @@ end
 
 end
 
-% ------ PLOTTING FUNCTION -------
+%% Plotting Functions
 
 function plot_states(tarr,state,ylabels,wrap_indices)
 % plot the states using subplots
@@ -671,6 +785,24 @@ function plot_both_states(tarr,state1,state2,ylabels,wrap_indices)
 
 end
 
+% ------ Error Plotting Function
+function plot_errors(tarr,errors,sigmas,ylabels)
+% plot the states using subplots
+
+    for i=1:size(errors,1)
+        subplot(size(errors,1),1,i)
+        plot(tarr,errors(i,:),'Color','red','LineWidth',1.5)
+        hold on
+        plot(tarr,sigmas(i,:),'--','Color','black','LineWidth',1.5)
+        hold on
+        plot(tarr,-1*sigmas(i,:),'--','Color','black','LineWidth',1.5)
+        ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
+        xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
+        grid on
+        legend('Error','$2\sigma$ Error Bound','$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
+    end
+
+end
 
 % ------ KALMAN FILTER PLOTTING FUNCTION -------
 
@@ -692,16 +824,20 @@ end
         plot(tarr,sim_state(i,:),'Color','blue','LineWidth',1.5)
         hold on
         plot(tarr,KF_state(i,:),'Color','red','LineWidth',1.5)
-        hold on
-        plot(tarr, KF_state(i,:) + sigmas(i,:),'--','Color','black','LineWidth',1.5)
-        hold on
-        plot(tarr, KF_state(i,:) - sigmas(i,:),'--','Color','black','LineWidth',1.5)
+        % hold on
+        % plot(tarr, KF_state(i,:) + sigmas(i,:),'--','Color','black','LineWidth',1.5)
+        % hold on
+        % plot(tarr, KF_state(i,:) - sigmas(i,:),'--','Color','black','LineWidth',1.5)
 
         ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
 
         grid on
+
         legend(truth_label, 'KF output','$2\sigma$ Error Bound','$2\sigma$ Error Bound','Interpreter','latex')
+
+       % legend('Simulated ground truth', 'KF output','$2\sigma$ Error Bound','$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
+
     end
 
 end
@@ -777,9 +913,11 @@ function plot_error(tarr,error,sigmas_all, ylabels)
             sgtitle('State Error Estimate')
         end
     end
-
 end
 
+
+%% Observations Calculation Functions
+% ------- with noise --------
 function y = calc_obs_from_state(x,vtilde)
     x1 = x(1,:);
     x2 = x(2,:);
@@ -787,17 +925,33 @@ function y = calc_obs_from_state(x,vtilde)
     x4 = x(4,:);
     x5 = x(5,:);
     x6 = x(6,:);
-    %x3= mod(x3+pi,2*pi)-pi;
-    %x6= mod(x6+pi,2*pi)-pi;
        
     y = [atan2( (x5-x2) , (x4-x1) ) - x3;...
              sqrt( (-x4+x1).^2 + (-x5+x2).^2 );...
              atan2( (x2-x5) , (x1-x4) ) - x6;...
              x4;...
              x5]+vtilde;
-
 end
 
+% ------- without noise --------
+function y = compute_Y(x)
+    % Extract state variables
+    x1 = x(1); % xi_g
+    x2 = x(2); % eta_g
+    x3 = x(3); % theta_g
+    x4 = x(4); % xi_a
+    x5 = x(5); % eta_a
+    x6 = x(6); % theta_a
+
+    % Compute measurements
+     y = [atan2( (x5-x2) , (x4-x1) ) - x3;...
+             sqrt( (-x4+x1).^2 + (-x5+x2).^2 );...
+             atan2( (x2-x5) , (x1-x4) ) - x6;...
+             x4;...
+             x5];
+end
+
+%% Dynamic Matrices Functions
 % -----------DYNAMIC ABAR, BBAR, HBAR MATRICES FOR EKF----------------
 
 function Abar = compute_Abar(x, u)
@@ -864,22 +1018,7 @@ end
 
 
 
-function y = compute_Y(x)
-    % Extract state variables
-    x1 = x(1); % xi_g
-    x2 = x(2); % eta_g
-    x3 = x(3); % theta_g
-    x4 = x(4); % xi_a
-    x5 = x(5); % eta_a
-    x6 = x(6); % theta_a
 
-    % Compute measurements
-     y = [atan2( (x5-x2) , (x4-x1) ) - x3;...
-             sqrt( (-x4+x1).^2 + (-x5+x2).^2 );...
-             atan2( (x2-x5) , (x1-x4) ) - x6;...
-             x4;...
-             x5];
-end
 
 function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect] = EKF(y_truth_sim,xhat0,Pk0,unom,L,tarr,Q,R)
 % Initialize EKF
@@ -959,3 +1098,4 @@ function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect] = EKF(y_truth_
 
     end
 end
+

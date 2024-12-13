@@ -65,9 +65,9 @@ if show_plot
     plot([0, ktot],[r1 r1],'--',Color='r',DisplayName='r_1 bound')
     plot([0, ktot],[r2 r2],'--',Color='r',DisplayName='r_2 bound')
     hold off
-    title('NIS Estimation Results')
-    ylabel('NIS stat, $\bar{\epsilon_k}$',Interpreter='latex')
-    xlabel('time step, k')
-    legend
+    title('NIS Estimation Results','FontSize',14, 'Interpreter','latex')
+    ylabel('NIS stat, $\bar{\epsilon_k}$','FontSize',12, 'Interpreter','latex')
+    xlabel('time step, k','FontSize',12, 'Interpreter','latex')
+    legend('NIS val','Upper Bound','Lower Bound','FontSize',12, 'Interpreter','latex')
 end
 
