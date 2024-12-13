@@ -180,7 +180,6 @@ sgtitle('Nonlinear and Linearized Measurements','FontSize',14, 'Interpreter','la
 coopData = load('cooplocalization_finalproj_KFdata.mat');
 Q = coopData.Qtrue;
 R = coopData.Rtrue;
-ydata = coopData.ydata;
 
 MC_num = 100; % number of monte carlo simulations
 
@@ -227,7 +226,7 @@ for m = 1:MC_num % for each MC iteration
         x_truth_sim(:,:,m) = x';
 
         % simulate measurement noise and add to sensor data
-        vk = mvnrnd(zeros(1,size(ydata,1)),R)';
+        vk = mvnrnd(zeros(1,5),R)';
         y_truth_sim(:,:,m) = calc_obs_from_state(x_truth_sim(:,:,m),vk);
         %H_t = squeeze(H(:,:,k));
         %M_t = squeeze(M(:,:,k));
@@ -389,6 +388,9 @@ sigmas_all = zeros(6, 6, length(tarr), MC_num);
 x_truth_sim=zeros(6,length(tarr), MC_num);
 y_truth_sim = zeros(5, length(tarr),MC_num);
 
+xhat0_EKF = xtrue0;
+Pk0_EKF = diag([300 300 300 300 300 300]); 
+Q_EKF = Q;
 for m = 1:MC_num % Monte Carlo iterations
 
     % Simulate truth state for NEES and NIS tests
@@ -420,9 +422,8 @@ for m = 1:MC_num % Monte Carlo iterations
     end
 
     % Initialize EKF
-    xhat0 = xtrue0;
-    Pk0 = diag([300 300 300 300 300 300]); 
-    [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect] = EKF(y_truth_sim(:,:,m),xhat0,Pk0,unom,L,tarr,Q,R);
+
+    [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect] = EKF(y_truth_sim(:,:,m),xhat0_EKF,Pk0_EKF,unom,L,tarr,Q_EKF,R);
     % Save results for this Monte Carlo iteration
     Pk_plus_all(:, :, :, m) = Pk_all;
     y_all(:, :, m) = yhat;
@@ -495,6 +496,37 @@ alpha_NIS = alpha_NEES;
 % - Sk = n x n x length of time array x N
 % - alpha = scalar = significance level
 % - show_plot = optional, if true then plot result
+
+%% Part II number 6
+% Initialization
+ydata = coopData.ydata;
+tvec = coopData.tvec;
+
+
+% EKF
+[Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect] = EKF(ydata,xhat0_EKF,Pk0_EKF,unom,L,tvec,Q_EKF,R);
+% Save results for this Monte Carlo iteration
+Pk_plus_all(:, :, :, m) = Pk_all;
+y_all(:, :, m) = yhat;
+xhat_all(:, :, m) = xhat;
+innovation_all(:,:,m) = innovation;
+Sk_all(:,:,:,m) = Sk_collect;
+sigmas_all = sigmas_collect;
+
+
+% noisy measured data + corresponding EKF estimation
+figure()
+plot_EKF(tvec(2:end), ydata(:,2:end), yhat(:,2:end), yunits, wrap_indices_y)
+sgtitle('Simulated Measurements, EKF for ydata','FontSize',14, 'Interpreter','latex')
+
+% plot errors
+figure()
+error_y = ydata-yhat;
+error_y(1,:) = wrapToPi(error_y(1,:));
+error_y(3,:) = wrapToPi(error_y(3,:));
+plot_error(tvec, error_y,sigmas_all, yunits)
+sgtitle('Measurement Error Estimate, EKF for ydata','FontSize',14, 'Interpreter','latex')
+
 
 %% Functions
 
@@ -693,21 +725,44 @@ function plot_error(tarr,error,sigmas_all, ylabels)
     %     sim_state(wrap_indices(iw),:)= mod(sim_state(wrap_indices(iw),:)+pi,2*pi)-pi;  
     %     KF_state(wrap_indices(iw),:)= mod(KF_state(wrap_indices(iw),:)+pi,2*pi)-pi; 
     % end
-
-    for i=1:size(error,1)
-        subplot(size(error,1),1,i)
-        sigma_plus = error(i,:) + squeeze(sigmas_all(i,i,:,5))';
-        sigma_minus = error(i,:) - squeeze(sigmas_all(i,i,:,5))';
-        hold on
-        plot(tarr,error(i,:),'Color','blue','LineWidth',.5)
-        plot(tarr, sigma_plus,"Color",'r', 'LineStyle', '--')
-        plot(tarr, sigma_minus, 'Color','r', 'LineStyle', '--')
-        hold off
-        ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
-        xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
-        grid on
-        legend('KF output error','$2\sigma$ Error Bound','$2\sigma$ Error Bound','Interpreter','latex')
-        sgtitle('State Error Estimate')
+    if size(sigmas_all,4) ==1
+        plot_ind = 1;
+    else
+        plot_ind = 5;
+    end
+    
+    if size(error,1) == 6
+        for i=1:size(error,1)
+            subplot(size(error,1),1,i)
+            sigma_plus = error(i,:) + squeeze(sigmas_all(i,i,:,plot_ind ))';
+            sigma_minus = error(i,:) - squeeze(sigmas_all(i,i,:,plot_ind ))';
+            hold on
+            plot(tarr,error(i,:),'Color','blue','LineWidth',.5)
+            plot(tarr, sigma_plus,"Color",'r', 'LineStyle', '--')
+            plot(tarr, sigma_minus, 'Color','r', 'LineStyle', '--')
+            hold off
+            ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
+            xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
+            grid on
+            legend('KF output error','$2\sigma$ Error Bound','$2\sigma$ Error Bound','Interpreter','latex')
+            sgtitle('State Error Estimate')
+        end
+    else
+        for i=1:size(error,1)
+            subplot(size(error,1),1,i)
+            sigma_plus = error(i,:) + squeeze(sigmas_all(i,i,:,plot_ind ))';
+            sigma_minus = error(i,:) - squeeze(sigmas_all(i,i,:,plot_ind ))';
+            hold on
+            plot(tarr,error(i,:),'Color','blue','LineWidth',.5)
+            plot(tarr, sigma_plus,"Color",'r', 'LineStyle', '--')
+            plot(tarr, sigma_minus, 'Color','r', 'LineStyle', '--')
+            hold off
+            ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
+            xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
+            grid on
+            legend('KF output error','$2\sigma$ Error Bound','$2\sigma$ Error Bound','Interpreter','latex')
+            sgtitle('State Error Estimate')
+        end
     end
 
 end
