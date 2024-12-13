@@ -210,9 +210,9 @@ ysigmas_all = zeros(5,length(tarr), MC_num);
 
 % TUNING THE Q MATRIX
     % manually adjusting based on error plots and NEES plots
-Q_KF = diag([1e5, 1e4, 1e2, 1e2, 1e2, 1e2]);
-R_KF = R;
-P0 = diag([15 25 1 7 10 1]);
+Q_LKF = diag([1e5, 1e4, 1e2, 1e2, 1e2, 1e2]);
+R_LKF = R;
+P0_LKF = diag([15 25 1 7 10 1]);
 
 
 for m = 1:MC_num % for each MC iteration
@@ -226,23 +226,8 @@ for m = 1:MC_num % for each MC iteration
     % Next, use the simulated "truth" measurements as inputs to KF
 
     % initialize KF
-    dxhat0 = deltx0; % initial perturbation state estimate
-    dxhat = zeros(6,length(tarr)); 
-    dxhat(:,1) = dxhat0;
-
-    dyhat = zeros(5,length(tarr));
-
-    du0 = [0;0;0;0]; % fill in with real numbers later!!
-    du = zeros(4,length(tarr));
-    du(:,1) = du0;
-
-    % initial state covariance matrix
-    Pk = zeros(6,6,length(tarr));
-    Pk(:,:,1) = P0;
-
-    xsigmas = zeros(6,length(tarr));
-    ysigmas = zeros(5,length(tarr));
-    xsigmas(:,1) = [2*sqrt(P0(1,1)); 2*sqrt(P0(2,2)); 2*sqrt(P0(3,3)); 2*sqrt(P0(4,4)); 2*sqrt(P0(5,5)); 2*sqrt(P0(6,6))];
+    dxhat0_LKF = deltx0; % initial perturbation state estimate
+    du0_LKF = [0;0;0;0]; % fill in with real numbers later!!
 
     for k = 2:length(tarr) % for each timestep k 
 
@@ -258,64 +243,10 @@ for m = 1:MC_num % for each MC iteration
 
         y_truth_sim(:,k,m) = calc_obs_from_state(x_truth_sim(:,k,m),vk);
 
-        % must re-calculate F, G, H, Omega at each timestep! These are not
-        % the same as the F, G, H Jacobians calculated in part 1.
-        Ftild_k = eye(6) + dt*Abar(:,:,k-1);
-        Htild_k = H(:,:,k); % H tilde = H bar = C bar
-        Gtild_k = dt*Bbar(:,:,k-1);
-        Gamma = eye(6);
-        Omegatild_k = dt*Gamma;
-
-        % prediction step
-        dxhat_minus = Ftild_k*dxhat(:,k-1) + Gtild_k*du(:,k-1);
-        Pk_minus = Ftild_k*Pk(:,:,k-1)*Ftild_k' + Omegatild_k*Q_KF*Omegatild_k';
-       
-        Skval = Htild_k*Pk_minus*Htild_k' + R_KF;
-        Skval = 0.5*(Skval + Skval');
-
-        % gain K
-        K = Pk_minus*Htild_k' * inv(Htild_k*Pk_minus*Htild_k' + R_KF);
-
-        % correction step
-        Pk_plus = (eye(6) - K*Htild_k)*Pk_minus;
-        pretend_y_data = y_truth_sim(:,k,m); % this is y_k+1
-        % y* contains NO NOISE
-        predicted_y = compute_Y(xnom(:,k)); % this is y*_k+1
-        dy = pretend_y_data-predicted_y;
-        innovation_k = dy-Htild_k*dxhat_minus; 
-        % angle wrapping - rows 1 and 3 of the innovation vector
-            % due to angles being very close to pi or -pi due to atan2
-            % we want to shift the angle range to be 0 to 2pi, then
-            % subtract pi to eliminate discontinuities near +/-pi
-        padding = 1e-6; % tiny tolerance
-        innovation_k(1) = mod(innovation_k(1) + pi + padding, 2*pi) - pi - padding;
-        innovation_k(3) = mod(innovation_k(3) + pi + padding, 2*pi) - pi - padding;
-        dxhat_plus = dxhat_minus + K*(innovation_k);
-
-        % results of the state & covariance
-        dxhat(:,k) = dxhat_plus;
-        Pk(:,:,k) = Pk_plus;
-        dyhat(:,k) = Htild_k*dxhat_minus;
-        Sk(:,:,k) = Skval;
-        innovation(:,k) = innovation_k;
-
-        % extract 2sigma values
-        xsigma1 = 2*sqrt(Pk(1,1,k));
-        xsigma2 = 2*sqrt(Pk(2,2,k));
-        xsigma3 = 2*sqrt(Pk(3,3,k));
-        xsigma4 = 2*sqrt(Pk(4,4,k));
-        xsigma5 = 2*sqrt(Pk(5,5,k));
-        xsigma6 = 2*sqrt(Pk(6,6,k));
-        xsigmas(:,k) = [xsigma1;xsigma2;xsigma3;xsigma4;xsigma5;xsigma6];
-
-        ysigma1 = 2*sqrt(Sk(1,1,k));
-        ysigma2 = 2*sqrt(Sk(2,2,k));
-        ysigma3 = 2*sqrt(Sk(3,3,k));
-        ysigma4 = 2*sqrt(Sk(4,4,k));
-        ysigma5 = 2*sqrt(Sk(5,5,k));
-        ysigmas(:,k) = [ysigma1;ysigma2;ysigma3;ysigma4;ysigma5];
-
     end
+    
+    [Pk,dyhat,dxhat,innovation,Sk,xsigmas,ysigmas] = LKF(y_truth_sim(:,:,m),dxhat0_LKF,P0_LKF,du0_LKF,tarr,Q_LKF,R_LKF,Abar,Bbar,H,xnom);
+
     xsigmas_all(:,:,m) = xsigmas;
     ysigmas_all(:,:,m) = ysigmas;
     dxhat_all(:,:,m) = dxhat;
@@ -987,6 +918,95 @@ function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(
         Sk_collect(:,:,k) = Skval;
         sigmas_collect(:,:,k) = diag([2*sqrt(Pk_plus(1,1)) 2*sqrt(Pk_plus(2,2)) 2*sqrt(Pk_plus(3,3)) 2*sqrt(Pk_plus(4,4)) 2*sqrt(Pk_plus(5,5)) 2*sqrt(Pk_plus(6,6))]);
 
+        ysigmas(:,k) = [ysigma1;ysigma2;ysigma3;ysigma4;ysigma5];
+
+    end
+end
+
+function [Pk,dyhat,dxhat,innovation,Sk,xsigmas,ysigmas] = LKF(y_truth_sim,dxhat0_LKF,Pk0_LKF,du0_LKF,tarr,Q_LKF,R,Abar,Bbar,H,xnom)
+
+    
+    % ----------------
+    % Next, use the simulated "truth" measurements as inputs to KF
+
+    % initialize KF
+    dxhat = zeros(6,length(tarr)); 
+    dxhat(:,1) = dxhat0_LKF;
+
+    dyhat = zeros(5,length(tarr));
+
+    du = zeros(4,length(tarr));
+    du(:,1) = du0_LKF;
+
+    % initial state covariance matrix
+    P0 = Pk0_LKF;
+    Pk = zeros(6,6,length(tarr));
+    Pk(:,:,1) = P0;
+
+    xsigmas = zeros(6,length(tarr));
+    ysigmas = zeros(5,length(tarr));
+    xsigmas(:,1) = [2*sqrt(P0(1,1)); 2*sqrt(P0(2,2)); 2*sqrt(P0(3,3)); 2*sqrt(P0(4,4)); 2*sqrt(P0(5,5)); 2*sqrt(P0(6,6))];
+
+    dt = tarr(2)-tarr(1);
+
+    Q_KF = Q_LKF;
+    R_KF = R;
+    for k = 2:length(tarr)
+        % must re-calculate F, G, H, Omega at each timestep! These are not
+        % the same as the F, G, H Jacobians calculated in part 1.
+        Ftild_k = eye(6) + dt*Abar(:,:,k-1);
+        Htild_k = H(:,:,k); % H tilde = H bar = C bar
+        Gtild_k = dt*Bbar(:,:,k-1);
+        Gamma = eye(6);
+        Omegatild_k = dt*Gamma;
+
+        % prediction step
+        dxhat_minus = Ftild_k*dxhat(:,k-1) + Gtild_k*du(:,k-1);
+        Pk_minus = Ftild_k*Pk(:,:,k-1)*Ftild_k' + Omegatild_k*Q_KF*Omegatild_k';
+       
+        Skval = Htild_k*Pk_minus*Htild_k' + R_KF;
+        Skval = 0.5*(Skval + Skval');
+
+        % gain K
+        K = Pk_minus*Htild_k' * inv(Htild_k*Pk_minus*Htild_k' + R_KF);
+
+        % correction step
+        Pk_plus = (eye(6) - K*Htild_k)*Pk_minus;
+        pretend_y_data = y_truth_sim(:,k); % this is y_k+1
+        % y* contains NO NOISE
+        predicted_y = compute_Y(xnom(:,k)); % this is y*_k+1
+        dy = pretend_y_data-predicted_y;
+        innovation_k = dy-Htild_k*dxhat_minus; 
+        % angle wrapping - rows 1 and 3 of the innovation vector
+            % due to angles being very close to pi or -pi due to atan2
+            % we want to shift the angle range to be 0 to 2pi, then
+            % subtract pi to eliminate discontinuities near +/-pi
+        padding = 1e-6; % tiny tolerance
+        innovation_k(1) = mod(innovation_k(1) + pi + padding, 2*pi) - pi - padding;
+        innovation_k(3) = mod(innovation_k(3) + pi + padding, 2*pi) - pi - padding;
+        dxhat_plus = dxhat_minus + K*(innovation_k);
+
+        % results of the state & covariance
+        dxhat(:,k) = dxhat_plus;
+        Pk(:,:,k) = Pk_plus;
+        dyhat(:,k) = Htild_k*dxhat_minus;
+        Sk(:,:,k) = Skval;
+        innovation(:,k) = innovation_k;
+
+        % extract 2sigma values
+        xsigma1 = 2*sqrt(Pk(1,1,k));
+        xsigma2 = 2*sqrt(Pk(2,2,k));
+        xsigma3 = 2*sqrt(Pk(3,3,k));
+        xsigma4 = 2*sqrt(Pk(4,4,k));
+        xsigma5 = 2*sqrt(Pk(5,5,k));
+        xsigma6 = 2*sqrt(Pk(6,6,k));
+        xsigmas(:,k) = [xsigma1;xsigma2;xsigma3;xsigma4;xsigma5;xsigma6];
+
+        ysigma1 = 2*sqrt(Sk(1,1,k));
+        ysigma2 = 2*sqrt(Sk(2,2,k));
+        ysigma3 = 2*sqrt(Sk(3,3,k));
+        ysigma4 = 2*sqrt(Sk(4,4,k));
+        ysigma5 = 2*sqrt(Sk(5,5,k));
         ysigmas(:,k) = [ysigma1;ysigma2;ysigma3;ysigma4;ysigma5];
 
     end
