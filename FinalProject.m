@@ -515,18 +515,19 @@ sigmas_all = sigmas_collect;
 
 
 % noisy measured data + corresponding EKF estimation
-figure()
-plot_EKF(tvec(2:end), ydata(:,2:end), yhat(:,2:end), yunits, wrap_indices_y)
-sgtitle('Simulated Measurements, EKF for ydata','FontSize',14, 'Interpreter','latex')
+fig_EKF_yadata = figure();
+plot_EKF(tvec(2:end), ydata(:,2:end), yhat(:,2:end), yunits, wrap_indices_y,1)
+sgtitle('Measurements, EKF for ydata','FontSize',14, 'Interpreter','latex')
+saveas(fig_EKF_yadata, 'images/EKF_ydata_pt6.png')
 
 % plot errors
-figure()
+fig_EKF_error_yadata=figure();
 error_y = ydata-yhat;
 error_y(1,:) = wrapToPi(error_y(1,:));
 error_y(3,:) = wrapToPi(error_y(3,:));
 plot_error(tvec, error_y,sigmas_all, yunits)
 sgtitle('Measurement Error Estimate, EKF for ydata','FontSize',14, 'Interpreter','latex')
-
+saveas(fig_EKF_error_yadata, 'images/EKF_error_ydata_pt6.png')
 
 %% Functions
 
@@ -673,7 +674,13 @@ end
 
 % ------ KALMAN FILTER PLOTTING FUNCTION -------
 
-function plot_KF(tarr,sim_state,KF_state, sigmas, ylabels,wrap_indices)
+function plot_KF(tarr,sim_state,KF_state, sigmas, ylabels,wrap_indices,real_data)
+if not(exist('real_data','var'))
+    truth_label = 'Simulated ground truth';
+else 
+    truth_label = 'Ground truth';
+end
+
 % plot the states using subplots
     for iw = 1:length(wrap_indices)
         sim_state(wrap_indices(iw),:)= mod(sim_state(wrap_indices(iw),:)+pi,2*pi)-pi;  
@@ -694,12 +701,18 @@ function plot_KF(tarr,sim_state,KF_state, sigmas, ylabels,wrap_indices)
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
 
         grid on
-        legend('Simulated ground truth', 'KF output','$2\sigma$ Error Bound','$2\sigma$ Error Bound','Interpreter','latex')
+        legend(truth_label, 'KF output','$2\sigma$ Error Bound','$2\sigma$ Error Bound','Interpreter','latex')
     end
 
 end
 
-function plot_EKF(tarr,sim_state,KF_state,ylabels,wrap_indices)
+function plot_EKF(tarr,sim_state,KF_state,ylabels,wrap_indices,real_data)
+if not(exist('real_data','var'))
+    truth_label = 'Simulated ground truth';
+else 
+    truth_label = 'Ground truth';
+end
+
 % plot the states using subplots
     for iw = 1:length(wrap_indices)
         sim_state(wrap_indices(iw),:)= mod(sim_state(wrap_indices(iw),:)+pi,2*pi)-pi;  
@@ -714,7 +727,7 @@ function plot_EKF(tarr,sim_state,KF_state,ylabels,wrap_indices)
         ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
         grid on
-        legend('Simulated ground truth', 'KF output')
+        legend(truth_label, 'KF output')
     end
 
 end
