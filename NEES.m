@@ -38,7 +38,7 @@ r1 = chi2inv(alpha/2,N*nstates)/N;
 r2 = chi2inv(1-alpha/2,N*nstates)/N;
 
 inside_vals = sum(epsbar_xk>r1 & epsbar_xk<r2); % number of vals inside interval [r1,r2]
-predicted_inside_vals = (1-alpha)*100*ktot; % number of vals we SHOULD see inside interval
+predicted_inside_vals = (1-alpha)*ktot; % number of vals we SHOULD see inside interval
 
 % test to see if KF filter passes NEES test
 % may need to make this first "if" statement more lenient 
