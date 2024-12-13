@@ -481,22 +481,17 @@ saveas(fig_EKF_error_yadata, 'images/EKF_error_ydata_pt6.png')
 %% LKF
 [Pk,dyhat,dxhat,innovation,Sk,xsigmas,ysigmas] = LKF(ydata,dxhat0_LKF,P0_LKF,du0_LKF,tvec,Q_LKF,R_LKF,Abar,Bbar,H,xnom);
 yhat_LKF = dyhat + ynom;
-% Plots for a single ‘typical’ simulation instance, showing the noisy simulated ground truth
-% states, noisy simulated data, and resulting linearized KF state estimation errors
-    % just picking monte carlo iteration #5 arbitrarily as the one to plot
-% noisy simulated ground truth states + corresponding KF estimation 
-figure()
-plot_KF(tvec, x_truth_sim(:,:,5), xhat_all(:,:,5), xsigmas_all(:,:,5), xunits, wrap_indices_x)
-sgtitle('Simulated States, Linearized KF','FontSize',14, 'Interpreter','latex')
 
 % noisy simulated data + corresponding KF estimation
-figure()
+fig_LKF_yadata=figure();
 plot_KF(tvec, ydata, yhat_LKF, ysigmas, yunits, wrap_indices_y)
-sgtitle('Simulated Measurements, Linearized KF','FontSize',14, 'Interpreter','latex')
+sgtitle('Measurements, LKF for ydata','FontSize',14, 'Interpreter','latex')
+saveas(fig_LKF_yadata, 'images/LKF_ydata_pt6.png')
 
-figure()
+fig_LKF_error_yadata=figure();
 plot_errors(tvec(2:end),innovation(:,2:end),ysigmas(:,2:end), yunits)
-sgtitle('Measurement Errors, Linearized KF','FontSize',14, 'Interpreter','latex')
+sgtitle('Measurement Error Estimate, LKF for ydata','FontSize',14, 'Interpreter','latex')
+saveas(fig_LKF_error_yadata, 'images/LKF_error_ydata_pt6.png')
 
 %% Ode45 Function
 
