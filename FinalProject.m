@@ -403,21 +403,6 @@ for m = 1:MC_num % Monte Carlo iterations
     %    y_truth_sim(:, k, m) = calc_obs_from_state(x_truth_sim(:, k, m), vk);
     %end
 
-    % Initialize EKF
-    xhat = zeros(6, length(tarr)); 
-    xhat(:, 1) = xtrue0; % Initial state estimate
-
-    Pk = diag([300 300 300 300 300 300]); 
-    Pk_all = zeros(6, 6, length(tarr)); 
-    Pk_all(:, :, 1) = Pk;
-
-    yhat = zeros(5,length(tarr));
-    innovation = zeros(5,length(tarr));
-    Sk_collect = zeros(5,5,length(tarr));
-
-    sigmas_collect = zeros(6,6,length(tarr));
-    sigmas_collect(:,:,1) = diag([2*sqrt(P0(1,1)) 2*sqrt(P0(2,2)) 2*sqrt(P0(3,3)) 2*sqrt(P0(4,4)) 2*sqrt(P0(5,5)) 2*sqrt(P0(6,6))]);
-
     for k = 2:length(tarr)
 
         t1 = tarr(k-1);
@@ -432,68 +417,12 @@ for m = 1:MC_num % Monte Carlo iterations
 
         y_truth_sim(:,k,m) = calc_obs_from_state(x_truth_sim(:,k,m),vk);
 
-
-        % Calculate Jacobians for each time step using current state
-        Abar_k = compute_Abar(xhat(:, k-1), unom(:, k-1)); %does unom change? no
-        Bbar_k = compute_Bbar(xhat(:, k-1), unom(:, k-1)); %does unom change? no
-
-        Ftild_k = eye(6) + dt * Abar_k; % State transition matrix
-        Gtild_k = dt * Bbar_k; % Input matrix. IS THIS RIGHT?
-        Omegatild_k = dt * eye(6);   %does this need to change per timestep? No
-
-        % Compute Q_k dynamically
-        Q_k = Q; % need to figure out how to change this at every time step
-    
-        %EKF prediction
-        % From lecture notes: assume wk=0
-        my_ode = @(t, y) NL_ode(t, y, unom(1, k-1), unom(2, k-1), unom(3, k-1), unom(4, k-1),zeros(3),zeros(3), L); 
-        [~, xhat_minus] = ode45(my_ode, [tarr(k-1), tarr(k)], xhat(:, k-1));
-
-        xhat_minus = xhat_minus(end, :)'; % Take last output as predicted state
-        
-    
-        % covariance 
-        Pk_minus = Ftild_k * Pk_all(:, :, k-1) * Ftild_k' + Omegatild_k * Q_k * Omegatild_k';
-   
-
-        % innovation
-        predicted_y = compute_Y(xhat_minus);
-        Htild_k = compute_Cbar(xhat_minus); % I believe this is the same as dh/dx from Lecture 32 slide 7
-
-        ey_k = y_truth_sim(:, k, m) - predicted_y; % Actual measurements - predicted  
-        ey_k(1) = wrapToPi(ey_k(1));
-        ey_k(3) = wrapToPi(ey_k(3));
-        
-        %Do we need this? It's not in the slides. I believe the ey_k above
-        %captures the innovation.
-        %innovation = y_truth_sim - Htild_k * (xhat_minus); 
-
-        % correction
-        Sk = Htild_k * Pk_minus * Htild_k' + R;
-        Skval = 0.5*(Sk + Sk'); %taken from part 4. Do we need this?
-
-        Kk = Pk_minus * Htild_k' / Sk;
-
-        xhat_plus = xhat_minus + Kk * ey_k;
-        Pk_plus = (eye(6) - Kk * Htild_k) * Pk_minus;
-
-
-
-    
-        % Save results
-        xhat(:, k) = xhat_plus;
-        Pk_all(:, :, k) = Pk_plus;
-        yhat(:,k) = predicted_y;
-        %ey_KF(:, :, k) = Htild_k * xhat_minus; % Predicted measurements
-        innovation(:,k) = ey_k;
-        Sk_collect(:,:,k) = Skval;
-        sigmas_collect(:,:,k) = diag([2*sqrt(Pk_plus(1,1)) 2*sqrt(Pk_plus(2,2)) 2*sqrt(Pk_plus(3,3)) 2*sqrt(Pk_plus(4,4)) 2*sqrt(Pk_plus(5,5)) 2*sqrt(Pk_plus(6,6))]);
-
-
-        
-
     end
 
+    % Initialize EKF
+    xhat0 = xtrue0;
+    Pk0 = diag([300 300 300 300 300 300]); 
+    [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect] = EKF(y_truth_sim(:,:,m),xhat0,Pk0,unom,L,tarr,Q,R);
     % Save results for this Monte Carlo iteration
     Pk_plus_all(:, :, :, m) = Pk_all;
     y_all(:, :, m) = yhat;
@@ -882,4 +811,83 @@ function y = compute_Y(x)
              atan2( (x2-x5) , (x1-x4) ) - x6;...
              x4;...
              x5];
+end
+
+function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect] = EKF(y_truth_sim,xhat0,Pk0,unom,L,tarr,Q,R)
+% Initialize EKF
+    dt = tarr(2)-tarr(1);
+    xhat = zeros(6, length(tarr)); 
+    xhat(:, 1) = xhat0; % Initial state estimate
+
+    Pk_all = zeros(6, 6, length(tarr)); 
+    Pk_all(:, :, 1) = Pk0;
+
+    yhat = zeros(5,length(tarr));
+    innovation = zeros(5,length(tarr));
+    Sk_collect = zeros(5,5,length(tarr));
+
+    sigmas_collect = zeros(6,6,length(tarr));
+    P0 = Pk0;
+    sigmas_collect(:,:,1) = diag([2*sqrt(P0(1,1)) 2*sqrt(P0(2,2)) 2*sqrt(P0(3,3)) 2*sqrt(P0(4,4)) 2*sqrt(P0(5,5)) 2*sqrt(P0(6,6))]);
+
+
+    for k=2:length(tarr)
+        % Calculate Jacobians for each time step using current state
+        Abar_k = compute_Abar(xhat(:, k-1), unom(:, k-1)); %does unom change? no
+        Bbar_k = compute_Bbar(xhat(:, k-1), unom(:, k-1)); %does unom change? no
+
+        Ftild_k = eye(6) + dt * Abar_k; % State transition matrix
+        Gtild_k = dt * Bbar_k; % Input matrix. IS THIS RIGHT?
+        Omegatild_k = dt * eye(6);   %does this need to change per timestep? No
+
+        % Compute Q_k dynamically
+        Q_k = Q; % need to figure out how to change this at every time step
+    
+        %EKF prediction
+        % From lecture notes: assume wk=0
+        my_ode = @(t, y) NL_ode(t, y, unom(1, k-1), unom(2, k-1), unom(3, k-1), unom(4, k-1),zeros(3),zeros(3), L); 
+        [~, xhat_minus] = ode45(my_ode, [tarr(k-1), tarr(k)], xhat(:, k-1));
+
+        xhat_minus = xhat_minus(end, :)'; % Take last output as predicted state
+        
+    
+        % covariance 
+        Pk_minus = Ftild_k * Pk_all(:, :, k-1) * Ftild_k' + Omegatild_k * Q_k * Omegatild_k';
+   
+
+        % innovation
+        predicted_y = compute_Y(xhat_minus);
+        Htild_k = compute_Cbar(xhat_minus); % I believe this is the same as dh/dx from Lecture 32 slide 7
+
+        ey_k = y_truth_sim(:, k) - predicted_y; % Actual measurements - predicted  
+        ey_k(1) = wrapToPi(ey_k(1));
+        ey_k(3) = wrapToPi(ey_k(3));
+        
+        %Do we need this? It's not in the slides. I believe the ey_k above
+        %captures the innovation.
+        %innovation = y_truth_sim - Htild_k * (xhat_minus); 
+
+        % correction
+        Sk = Htild_k * Pk_minus * Htild_k' + R;
+        Skval = 0.5*(Sk + Sk'); %taken from part 4. Do we need this?
+
+        Kk = Pk_minus * Htild_k' / Sk;
+
+        xhat_plus = xhat_minus + Kk * ey_k;
+        Pk_plus = (eye(6) - Kk * Htild_k) * Pk_minus;
+
+
+
+    
+        % Save results
+        xhat(:, k) = xhat_plus;
+        Pk_all(:, :, k) = Pk_plus;
+        yhat(:,k) = predicted_y;
+        %ey_KF(:, :, k) = Htild_k * xhat_minus; % Predicted measurements
+        innovation(:,k) = ey_k;
+        Sk_collect(:,:,k) = Skval;
+        sigmas_collect(:,:,k) = diag([2*sqrt(Pk_plus(1,1)) 2*sqrt(Pk_plus(2,2)) 2*sqrt(Pk_plus(3,3)) 2*sqrt(Pk_plus(4,4)) 2*sqrt(Pk_plus(5,5)) 2*sqrt(Pk_plus(6,6))]);
+        
+
+    end
 end
