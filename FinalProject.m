@@ -619,14 +619,7 @@ tvec = coopData.tvec;
 
 
 % EKF
-[Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect] = EKF(ydata,xhat0_EKF,Pk0_EKF,unom,L,tvec,Q_EKF,R);
-% Save results for this Monte Carlo iteration
-Pk_plus_all(:, :, :, m) = Pk_all;
-y_all(:, :, m) = yhat;
-xhat_all(:, :, m) = xhat;
-innovation_all(:,:,m) = innovation;
-Sk_all(:,:,:,m) = Sk_collect;
-sigmas_all = sigmas_collect;
+[Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(ydata,xhat0_EKF,Pk0_EKF,unom,L,tvec,Q_EKF,R);
 
 
 % noisy measured data + corresponding EKF estimation
@@ -640,8 +633,12 @@ fig_EKF_error_yadata=figure();
 error_y = ydata-yhat;
 error_y(1,:) = wrapToPi(error_y(1,:));
 error_y(3,:) = wrapToPi(error_y(3,:));
-plot_error(tvec, error_y,sigmas_all, yunits)
+plot_errors(tvec, error_y,ysigmas, yunits)
 sgtitle('Measurement Error Estimate, EKF for ydata','FontSize',14, 'Interpreter','latex')
+subplot(5,1,1)
+ylim([-2*pi, 2*pi]/10)
+subplot(5,1,3)
+ylim([-2*pi, 2*pi]/10)
 saveas(fig_EKF_error_yadata, 'images/EKF_error_ydata_pt6.png')
 
 %% Ode45 Function
@@ -880,11 +877,11 @@ function plot_error(tarr,error,sigmas_all, ylabels)
         plot_ind = 5;
     end
     
-    if size(error,1) == 6
+
         for i=1:size(error,1)
             subplot(size(error,1),1,i)
-            sigma_plus = error(i,:) + squeeze(sigmas_all(i,i,:,plot_ind ))';
-            sigma_minus = error(i,:) - squeeze(sigmas_all(i,i,:,plot_ind ))';
+            sigma_plus = squeeze(sigmas_all(i,i,:,plot_ind ))';%error(i,:) + squeeze(sigmas_all(i,i,:,plot_ind ))';
+            sigma_minus = -1*squeeze(sigmas_all(i,i,:,plot_ind ))';%error(i,:) - squeeze(sigmas_all(i,i,:,plot_ind ))';
             hold on
             plot(tarr,error(i,:),'Color','blue','LineWidth',.5)
             plot(tarr, sigma_plus,"Color",'r', 'LineStyle', '--')
@@ -896,23 +893,7 @@ function plot_error(tarr,error,sigmas_all, ylabels)
             legend('KF output error','$2\sigma$ Error Bound','$2\sigma$ Error Bound','Interpreter','latex')
             sgtitle('State Error Estimate')
         end
-    else
-        for i=1:size(error,1)
-            subplot(size(error,1),1,i)
-            sigma_plus = error(i,:) + squeeze(sigmas_all(i,i,:,plot_ind ))';
-            sigma_minus = error(i,:) - squeeze(sigmas_all(i,i,:,plot_ind ))';
-            hold on
-            plot(tarr,error(i,:),'Color','blue','LineWidth',.5)
-            plot(tarr, sigma_plus,"Color",'r', 'LineStyle', '--')
-            plot(tarr, sigma_minus, 'Color','r', 'LineStyle', '--')
-            hold off
-            ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
-            xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
-            grid on
-            legend('KF output error','$2\sigma$ Error Bound','$2\sigma$ Error Bound','Interpreter','latex')
-            sgtitle('State Error Estimate')
-        end
-    end
+
 end
 
 
@@ -1020,7 +1001,7 @@ end
 
 
 
-function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect] = EKF(y_truth_sim,xhat0,Pk0,unom,L,tarr,Q,R)
+function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(y_truth_sim,xhat0,Pk0,unom,L,tarr,Q,R)
 % Initialize EKF
     dt = tarr(2)-tarr(1);
     xhat = zeros(6, length(tarr)); 
@@ -1036,7 +1017,7 @@ function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect] = EKF(y_truth_
     sigmas_collect = zeros(6,6,length(tarr));
     P0 = Pk0;
     sigmas_collect(:,:,1) = diag([2*sqrt(P0(1,1)) 2*sqrt(P0(2,2)) 2*sqrt(P0(3,3)) 2*sqrt(P0(4,4)) 2*sqrt(P0(5,5)) 2*sqrt(P0(6,6))]);
-
+    y_sigmas = zeros(5,length(tarr));
 
     for k=2:length(tarr)
         % Calculate Jacobians for each time step using current state
@@ -1084,8 +1065,13 @@ function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect] = EKF(y_truth_
         Pk_plus = (eye(6) - Kk * Htild_k) * Pk_minus;
 
 
+        
+        ysigma1 = 2*sqrt(Skval(1,1));
+        ysigma2 = 2*sqrt(Skval(2,2));
+        ysigma3 = 2*sqrt(Skval(3,3));
+        ysigma4 = 2*sqrt(Skval(4,4));
+        ysigma5 = 2*sqrt(Skval(5,5));
 
-    
         % Save results
         xhat(:, k) = xhat_plus;
         Pk_all(:, :, k) = Pk_plus;
@@ -1094,7 +1080,8 @@ function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect] = EKF(y_truth_
         innovation(:,k) = ey_k;
         Sk_collect(:,:,k) = Skval;
         sigmas_collect(:,:,k) = diag([2*sqrt(Pk_plus(1,1)) 2*sqrt(Pk_plus(2,2)) 2*sqrt(Pk_plus(3,3)) 2*sqrt(Pk_plus(4,4)) 2*sqrt(Pk_plus(5,5)) 2*sqrt(Pk_plus(6,6))]);
-        
+
+        ysigmas(:,k) = [ysigma1;ysigma2;ysigma3;ysigma4;ysigma5];
 
     end
 end
