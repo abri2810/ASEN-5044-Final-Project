@@ -211,9 +211,9 @@ ysigmas_all = zeros(5,length(tarr), MC_num);
 
 % TUNING THE Q MATRIX
     % manually adjusting based on error plots and NEES plots
-Q_KF = diag([1e4, 1e4, 1e2, 1e3, 1e3, 1e2]);
+Q_KF = diag([1e5, 1e4, 1e2, 1e2, 1e2, 1e2]);
 R_KF = R;
-P0 = 10*diag([20 10 1 1 1 1]);
+P0 = diag([15 25 1 7 10 1]);
 
 
 for m = 1:MC_num % for each MC iteration
