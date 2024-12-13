@@ -211,7 +211,9 @@ ysigmas_all = zeros(5,length(tarr), MC_num);
 
 % TUNING THE Q MATRIX
     % manually adjusting based on error plots and NEES plots
-Q_KF = diag([1e5, 1e5, 1e1, 1e2, 1e2, 1e1]);
+Q_KF = diag([1e4, 1e4, 1e2, 1e3, 1e3, 1e2]);
+R_KF = R;
+P0 = 10*diag([20 10 1 1 1 1]);
 
 
 for m = 1:MC_num % for each MC iteration
@@ -234,8 +236,7 @@ for m = 1:MC_num % for each MC iteration
     du = zeros(4,length(tarr));
     du(:,1) = du0;
 
-    % initial state covariance matrix - TUNE THIS
-    P0 = 10*diag([20 10 1 1 1 1]);
+    % initial state covariance matrix
     Pk = zeros(6,6,length(tarr));
     Pk(:,:,1) = P0;
 
@@ -268,12 +269,12 @@ for m = 1:MC_num % for each MC iteration
         % prediction step
         dxhat_minus = Ftild_k*dxhat(:,k-1) + Gtild_k*du(:,k-1);
         Pk_minus = Ftild_k*Pk(:,:,k-1)*Ftild_k' + Omegatild_k*Q_KF*Omegatild_k';
-        
-        % gain K
-        Skval = Htild_k*Pk_minus*Htild_k' + R;
+       
+        Skval = Htild_k*Pk_minus*Htild_k' + R_KF;
         Skval = 0.5*(Skval + Skval');
 
-        K = Pk_minus*Htild_k' * inv(Htild_k*Pk_minus*Htild_k' + R);
+        % gain K
+        K = Pk_minus*Htild_k' * inv(Htild_k*Pk_minus*Htild_k' + R_KF);
 
         % correction step
         Pk_plus = (eye(6) - K*Htild_k)*Pk_minus;
@@ -780,7 +781,7 @@ function plot_KF(tarr,sim_state,KF_state, sigmas, ylabels,wrap_indices)
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
 
         grid on
-        legend('Simulated ground truth', 'KF output','$2\sigma$ Error Bound','$2\sigma$ Error Bound','Interpreter','latex')
+        legend('Simulated ground truth', 'KF output','$2\sigma$ Error Bound','$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
     end
 
 end
