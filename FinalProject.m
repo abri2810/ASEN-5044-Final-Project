@@ -210,9 +210,9 @@ ysigmas_all = zeros(5,length(tarr), MC_num);
 
 % TUNING THE Q MATRIX
     % manually adjusting based on error plots and NEES plots
-Q_LKF = diag([1e5, 1e4, 1e2, 1e2, 1e2, 1e2]);
+Q_LKF = diag([1000, 1000, .4, 100, 100, 3]);
 R_LKF = R;
-P0_LKF = diag([15 25 1 7 10 1]);
+P0_LKF = diag([.5 .5 .03 400 400 .3]);
 
 
 for m = 1:MC_num % for each MC iteration
@@ -336,7 +336,7 @@ x_truth_sim=zeros(6,length(tarr), MC_num);
 y_truth_sim = zeros(5, length(tarr),MC_num);
 
 xhat0_EKF = xtrue0;
-Pk0_EKF = diag([300 300 300 300 300 300]); 
+Pk0_EKF = diag([300 300 10 300 300 10]); 
 Q_EKF = Q;
 
 % initialize error bounds
@@ -346,11 +346,8 @@ Q_EKF = Q;
 for m = 1:MC_num % Monte Carlo iterations
 
     % Simulate truth state for NEES and NIS tests
-    xtrue0 = mvnrnd(xnom_t0, Q)'; % initial state (used to be P0)
+    xtrue0 = mvnrnd(xnom_t0, Q)'; % initial state
     x_truth_sim(:,1,m)= xtrue0;
-
-    %[~, x_truth] = ode45(@(t, y) NL_ode(t, y, v_g0, phi_g0, v_a0, omega_a0, wk(1:3), wk(4:6), L), tarr, xtrue0);
-    %x_truth_sim(:, :, m) = x_truth'; %to match dimensions
 
     % Simulate measurements
     for k = 2:length(tarr)
@@ -362,7 +359,7 @@ for m = 1:MC_num % Monte Carlo iterations
         vk = mvnrnd(zeros(1, 5), R)'; % Measurement noise
 
         my_ode = @(t,y) NL_ode(t,y,v_g0,phi_g0,v_a0,omega_a0,wk(1:3),wk(4:6),L);
-        [t,x] = ode45(my_ode,[t1 t2],x_truth_sim(:,k-1,m)); % need to add in wk?
+        [t,x] = ode45(my_ode,[t1 t2],x_truth_sim(:,k-1,m)); 
         x_truth_sim(:,k,m) = x(end,:)';
 
         y_truth_sim(:,k,m) = calc_obs_from_state(x_truth_sim(:,k,m),vk);
@@ -478,6 +475,10 @@ subplot(5,1,3)
 ylim([-2*pi, 2*pi]/10)
 saveas(fig_EKF_error_yadata, 'images/EKF_error_ydata_pt6.png')
 
+
+
+
+
 %% LKF
 [Pk,dyhat,dxhat,innovation,Sk,xsigmas,ysigmas] = LKF(ydata,dxhat0_LKF,P0_LKF,du0_LKF,tvec,Q_LKF,R_LKF,Abar,Bbar,H,xnom);
 yhat_LKF = dyhat + ynom;
@@ -492,6 +493,14 @@ fig_LKF_error_yadata=figure();
 plot_errors(tvec(2:end),innovation(:,2:end),ysigmas(:,2:end), yunits)
 sgtitle('Measurement Error Estimate, LKF for ydata','FontSize',14, 'Interpreter','latex')
 saveas(fig_LKF_error_yadata, 'images/LKF_error_ydata_pt6.png')
+
+%Plotting the states themselves
+fig_state_est_yadata = figure();
+plot_states(tvec,xhat,xunits,wrap_indices_x)
+plot_states(tvec,(dxhat+xnom), xunits, wrap_indices_x)
+sgtitle('State Estimation from ydata')
+legend('EKF', 'LKF')
+saveas(fig_state_est_yadata, 'images/state_est.png')
 
 %% Ode45 Function
 
@@ -605,10 +614,12 @@ function plot_states(tarr,state,ylabels,wrap_indices)
 
     for i=1:size(state,1)
         subplot(size(state,1),1,i)
-        plot(tarr,state(i,:),'Color','blue','LineWidth',1.5)
+        hold on
+        plot(tarr,state(i,:))%,'Color','blue','LineWidth',1.5)
         ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
         grid on
+        hold off
     end
 
 end
@@ -877,7 +888,7 @@ function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(
         Bbar_k = compute_Bbar(xhat(:, k-1), unom(:, k-1)); %does unom change? no
 
         Ftild_k = eye(6) + dt * Abar_k; % State transition matrix
-        Gtild_k = dt * Bbar_k; % Input matrix. IS THIS RIGHT?
+        Gtild_k = dt * Bbar_k; % Input matrix.
         Omegatild_k = dt * eye(6);   %does this need to change per timestep? No
 
         % Compute Q_k dynamically
@@ -903,10 +914,6 @@ function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(
         ey_k(1) = wrapToPi(ey_k(1));
         ey_k(3) = wrapToPi(ey_k(3));
         
-        %Do we need this? It's not in the slides. I believe the ey_k above
-        %captures the innovation.
-        %innovation = y_truth_sim - Htild_k * (xhat_minus); 
-
         % correction
         Sk = Htild_k * Pk_minus * Htild_k' + R;
         Skval = 0.5*(Sk + Sk'); %taken from part 4. Do we need this?
@@ -928,7 +935,6 @@ function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(
         xhat(:, k) = xhat_plus;
         Pk_all(:, :, k) = Pk_plus;
         yhat(:,k) = predicted_y;
-        %ey_KF(:, :, k) = Htild_k * xhat_minus; % Predicted measurements
         innovation(:,k) = ey_k;
         Sk_collect(:,:,k) = Skval;
         sigmas_collect(:,:,k) = diag([2*sqrt(Pk_plus(1,1)) 2*sqrt(Pk_plus(2,2)) 2*sqrt(Pk_plus(3,3)) 2*sqrt(Pk_plus(4,4)) 2*sqrt(Pk_plus(5,5)) 2*sqrt(Pk_plus(6,6))]);
@@ -990,6 +996,8 @@ function [Pk,dyhat,dxhat,innovation,Sk,xsigmas,ysigmas] = LKF(y_truth_sim,dxhat0
         pretend_y_data = y_truth_sim(:,k); % this is y_k+1
         % y* contains NO NOISE
         predicted_y = compute_Y(xnom(:,k)); % this is y*_k+1
+        predicted_y(1,:) = wrapToPi(predicted_y(1,:));
+        predicted_y(3,:) = wrapToPi(predicted_y(3,:));
         dy = pretend_y_data-predicted_y;
         innovation_k = dy-Htild_k*dxhat_minus; 
         % angle wrapping - rows 1 and 3 of the innovation vector
