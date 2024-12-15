@@ -337,7 +337,7 @@ sigmas_all = zeros(6, 6, length(tarr), MC_num);
 x_truth_sim=zeros(6,length(tarr), MC_num);
 y_truth_sim = zeros(5, length(tarr),MC_num);
 
-xhat0_EKF = xtrue0;
+xhat0_EKF = xnom(:,1);
 Pk0_EKF = diag([300 300 10 300 300 10]); 
 Q_EKF = Q;
 
