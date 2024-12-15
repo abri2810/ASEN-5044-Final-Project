@@ -168,10 +168,12 @@ sgtitle('Nonlinear Measurements Minus Linearization Measurements','FontSize',14,
 % together) 
 figure(Visible="off")
 plot_both_states(tarr,state_perturbed_ode,full_state,xunits,wrap_indices_x)
+legend('Nonlinear','Linearized','FontSize',12,'Interpreter','latex')
 sgtitle('Nonlinear and Linearized States','FontSize',14, 'Interpreter','latex')
 
 figure(Visible="off")
 plot_both_states(tarr,y_ode,y_linearized,yunits,[1,3])
+legend('Nonlinear','Linearized','FontSize',12,'Interpreter','latex')
 sgtitle('Nonlinear and Linearized Measurements','FontSize',14, 'Interpreter','latex')
 
 
@@ -272,7 +274,7 @@ figure()
 plot_KF(tarr, y_truth_sim(:,:,5), y_all(:,:,5), ysigmas_all(:,:,5), yunits, wrap_indices_y)
 sgtitle('Simulated Measurements, Linearized KF','FontSize',14, 'Interpreter','latex')
 
-% Plotting errors
+%% Plotting errors
 figure()
 plot_errors(tarr,x_truth_sim(:,:,5) - xhat_all(:,:,5),xsigmas_all(:,:,5),xunits)
 sgtitle('State Errors, Linearized KF','FontSize',14, 'Interpreter','latex')
@@ -369,7 +371,7 @@ for m = 1:MC_num % Monte Carlo iterations
 
     % Initialize EKF
 
-    [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect] = EKF(y_truth_sim(:,:,m),xhat0_EKF,Pk0_EKF,unom,L,tarr,Q_EKF,R);
+    [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,xsigmas,ysigmas] = EKF(y_truth_sim(:,:,m),xhat0_EKF,Pk0_EKF,unom,L,tarr,Q_EKF,R);
     % Save results for this Monte Carlo iteration
     Pk_plus_all(:, :, :, m) = Pk_all;
     y_all(:, :, m) = yhat;
@@ -453,7 +455,7 @@ tvec = coopData.tvec;
 
 
 % EKF
-[Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(ydata,xhat0_EKF,Pk0_EKF,unom,L,tvec,Q_EKF,R);
+[Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,xsigmas,ysigmas] = EKF(ydata,xhat0_EKF,Pk0_EKF,unom,L,tvec,Q_EKF,R);
 
 
 % noisy measured data + corresponding EKF estimation
@@ -462,20 +464,13 @@ plot_EKF(tvec(2:end), ydata(:,2:end), yhat(:,2:end), yunits, wrap_indices_y,1)
 sgtitle('Measurements, EKF for ydata','FontSize',14, 'Interpreter','latex')
 saveas(fig_EKF_yadata, 'images/EKF_ydata_pt6.png')
 
-% plot errors
-fig_EKF_error_yadata=figure();
-error_y = ydata-yhat;
-error_y(1,:) = wrapToPi(error_y(1,:));
-error_y(3,:) = wrapToPi(error_y(3,:));
-plot_errors(tvec, error_y,ysigmas, yunits)
-sgtitle('Measurement Error Estimate, EKF for ydata','FontSize',14, 'Interpreter','latex')
-subplot(5,1,1)
-ylim([-2*pi, 2*pi]/10)
-subplot(5,1,3)
-ylim([-2*pi, 2*pi]/10)
-saveas(fig_EKF_error_yadata, 'images/EKF_error_ydata_pt6.png')
-
-
+%% plot errors
+xsigmas_EKF = xsigmas;
+fig_EKF_xerror_yadata=figure();
+plot_errors(tvec,nan(size(xsigmas)),xsigmas, xunits,[40,50,.5,20,20,1])
+sgtitle('Measurement Error Estimate, LKF for ydata','FontSize',14, 'Interpreter','latex')
+legend('','+-$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
+saveas(fig_EKF_xerror_yadata, 'images/EKF_xerror_ydata_pt6.png')
 
 
 
@@ -488,16 +483,27 @@ fig_LKF_yadata=figure();
 plot_KF(tvec, ydata, yhat_LKF, ysigmas, yunits, wrap_indices_y)
 sgtitle('Measurements, LKF for ydata','FontSize',14, 'Interpreter','latex')
 saveas(fig_LKF_yadata, 'images/LKF_ydata_pt6.png')
-
+%%
 fig_LKF_error_yadata=figure();
-plot_errors(tvec(2:end),innovation(:,2:end),ysigmas(:,2:end), yunits)
+plot_errors(tvec(2:end),innovation(:,2:end),ysigmas(:,2:end), xunits)
 sgtitle('Measurement Error Estimate, LKF for ydata','FontSize',14, 'Interpreter','latex')
 saveas(fig_LKF_error_yadata, 'images/LKF_error_ydata_pt6.png')
-
-%Plotting the states themselves
+%%
+fig_LKF_xerror_yadata=figure();
+plot_errors(tvec,nan(size(xsigmas)),xsigmas, xunits,[40,50,.5,20,20,1])
+sgtitle('Measurement Error Estimate, LKF for ydata','FontSize',14, 'Interpreter','latex')
+legend('','+-$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
+saveas(fig_LKF_xerror_yadata, 'images/LKF_xerror_ydata_pt6.png')
+%%
+fig_KF_xerror_yadata=figure();
+plot_both_states(tvec,xsigmas,xsigmas_EKF, xunits, wrap_indices_x,[40,40,.7,15,15,1])
+sgtitle('State Error Estimate for LKF and EKF','FontSize',14, 'Interpreter','latex')
+legend('LKF +-$2\sigma$ Error Bound','EKF +-$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
+saveas(fig_KF_xerror_yadata, 'images/all_KF_xerror_ydata_pt6.png')
+%% Plotting the states themselves
 fig_state_est_yadata = figure();
 plot_states(tvec,xhat,xunits,wrap_indices_x)
-plot_states(tvec,(dxhat+xnom), xunits, wrap_indices_x)
+plot_both_states(tvec,xhat,(dxhat+xnom), xunits, wrap_indices_x)
 sgtitle('State Estimation from ydata')
 legend('EKF', 'LKF')
 saveas(fig_state_est_yadata, 'images/state_est.png')
@@ -606,16 +612,20 @@ end
 
 %% Plotting Functions
 
-function plot_states(tarr,state,ylabels,wrap_indices)
+function plot_states(tarr,state,ylabels,wrap_indices,line_type)
 % plot the states using subplots
     for iw = 1:length(wrap_indices)
         state(wrap_indices(iw),:)= mod(state(wrap_indices(iw),:)+pi,2*pi)-pi;  
+    end
+    lw = 2;
+    if not(exist('line_type','var'))
+        line_type = '-';
     end
 
     for i=1:size(state,1)
         subplot(size(state,1),1,i)
         hold on
-        plot(tarr,state(i,:))%,'Color','blue','LineWidth',1.5)
+        plot(tarr,state(i,:),line_type,'linewidth',lw)%,'Color','blue','LineWidth',1.5)
         ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
         grid on
@@ -625,7 +635,7 @@ function plot_states(tarr,state,ylabels,wrap_indices)
 end
 
 % ------ Another Plotting Function ---------
-function plot_both_states(tarr,state1,state2,ylabels,wrap_indices)
+function plot_both_states(tarr,state1,state2,ylabels,wrap_indices,lims)
 % plot the states using subplots
     for iw = 1:length(wrap_indices)
         state1(wrap_indices(iw),:)= mod(state1(wrap_indices(iw),:)+pi,2*pi)-pi;  
@@ -640,15 +650,18 @@ function plot_both_states(tarr,state1,state2,ylabels,wrap_indices)
         ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
         grid on
-        legend('Nonlinear','Linearized','FontSize',12,'Interpreter','latex')
+        if exist('lims','var')
+            ylim([-lims(i) lims(i)])
+        end
+        
     end
 
 end
 
 % ------ Error Plotting Function
-function plot_errors(tarr,errors,sigmas,ylabels)
+function plot_errors(tarr,errors,sigmas,ylabels,lims)
 % plot the states using subplots
-
+    
     for i=1:size(errors,1)
         subplot(size(errors,1),1,i)
         plot(tarr,errors(i,:),'Color','red','LineWidth',1.5)
@@ -659,8 +672,12 @@ function plot_errors(tarr,errors,sigmas,ylabels)
         ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
         grid on
-        legend('Error','$2\sigma$ Error Bound','$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
+        if exist('lims','var')
+            ylim([-lims(i) lims(i)])
+        end
+        
     end
+    legend('Error','$2\sigma$ Error Bound','$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
 
 end
 
@@ -864,7 +881,7 @@ end
 
 
 
-function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(y_truth_sim,xhat0,Pk0,unom,L,tarr,Q,R)
+function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,xsigmas,ysigmas] = EKF(y_truth_sim,xhat0,Pk0,unom,L,tarr,Q,R)
 % Initialize EKF
     dt = tarr(2)-tarr(1);
     xhat = zeros(6, length(tarr)); 
@@ -880,7 +897,8 @@ function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(
     sigmas_collect = zeros(6,6,length(tarr));
     P0 = Pk0;
     sigmas_collect(:,:,1) = diag([2*sqrt(P0(1,1)) 2*sqrt(P0(2,2)) 2*sqrt(P0(3,3)) 2*sqrt(P0(4,4)) 2*sqrt(P0(5,5)) 2*sqrt(P0(6,6))]);
-    y_sigmas = zeros(5,length(tarr));
+    xsigmas = zeros(6,length(tarr));
+    ysigmas = zeros(5,length(tarr));
 
     for k=2:length(tarr)
         % Calculate Jacobians for each time step using current state
@@ -931,6 +949,16 @@ function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(
         ysigma4 = 2*sqrt(Skval(4,4));
         ysigma5 = 2*sqrt(Skval(5,5));
 
+        % extract 2sigma values
+        xsigma1 = 2*sqrt(Pk_plus(1,1));
+        xsigma2 = 2*sqrt(Pk_plus(2,2));
+        xsigma3 = 2*sqrt(Pk_plus(3,3));
+        xsigma4 = 2*sqrt(Pk_plus(4,4));
+        xsigma5 = 2*sqrt(Pk_plus(5,5));
+        xsigma6 = 2*sqrt(Pk_plus(6,6));
+        
+
+
         % Save results
         xhat(:, k) = xhat_plus;
         Pk_all(:, :, k) = Pk_plus;
@@ -938,7 +966,7 @@ function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(
         innovation(:,k) = ey_k;
         Sk_collect(:,:,k) = Skval;
         sigmas_collect(:,:,k) = diag([2*sqrt(Pk_plus(1,1)) 2*sqrt(Pk_plus(2,2)) 2*sqrt(Pk_plus(3,3)) 2*sqrt(Pk_plus(4,4)) 2*sqrt(Pk_plus(5,5)) 2*sqrt(Pk_plus(6,6))]);
-
+        xsigmas(:,k) = [xsigma1;xsigma2;xsigma3;xsigma4;xsigma5;xsigma6];
         ysigmas(:,k) = [ysigma1;ysigma2;ysigma3;ysigma4;ysigma5];
 
     end
