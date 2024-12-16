@@ -72,9 +72,8 @@ unom = repmat(unom_t0,1,length(tarr));
 %% Part I, Problem 3.
 
 du = zeros(4,length(tarr)); % du vector
-deltx0 = [0; 1; 0; 0; 0; 0.1]; %dx0
-% deltx0 = [x1; x2; x3; x4; x5; x6];
-d_state = nan(6,length(tarr)); %dx
+deltx0 = [0; 1; 0; 0; 0; 0.1]; %dx(t=0)
+d_state = nan(6,length(tarr)); %dx(t)
 d_state(:,1) = deltx0;
 
 % solve for dx_k+1
@@ -85,8 +84,8 @@ for i = 2:length(tarr)
 end
 
 full_state = xnom + d_state; % x = x_nom + dx
-vtilde_nom = zeros(5,size(full_state,2));
-ynom = calc_obs_from_state(xnom,vtilde_nom);
+vtilde_nom = zeros(5,size(full_state,2)); % measurement noise
+ynom = calc_obs_from_state(xnom,vtilde_nom); % ynom
 
 % full state solved with ODE45
 my_ode = @(t,y) NL_ode(t,y,v_g0,phi_g0,v_a0,omega_a0,[0;0;0],[0;0;0],L);
@@ -121,43 +120,31 @@ plot_states(tarr,d_state,dxunits,[])
 sgtitle('Linearized Approximate Perturbations vs. Time','FontSize',14, 'Interpreter','latex')
 
 % plot full linearized state
-% fig2 = figure('units','normalized','outerposition',[0 1 .5 1]);
-%   ^ This line of code isn't compatible with matlab 2024a, had to change it!
 figure(Visible="off")
 plot_states(tarr,full_state,xunits,wrap_indices_x)
 sgtitle('States vs. Time, Linearized Approximate Dynamics Simulation','FontSize',14, 'Interpreter','latex')
 
 % States vs. Time, Full Nonlinear Dynamics Simulation
-% fig3 = figure('units','normalized','outerposition',[0 1 .5 1]);
-%   ^ This line of code isn't compatible with matlab 2024a, had to change it!
 figure(Visible="off")
 plot_states(tarr,state_perturbed_ode,xunits,wrap_indices_x)
 sgtitle('States vs. Time, Full Nonlinear Dynamics Simulation','FontSize',14, 'Interpreter','latex')
 
 % plot measurements, linearized
-%fig4 = figure('units','normalized','outerposition',[0 1 .5 1]);
-%   ^ This line of code isn't compatible with matlab 2024a, had to change it!
 figure(Visible="off")
 plot_states(tarr,y_linearized,yunits,[1,3])
 sgtitle('Linearized Approximate Dynamics Measurements','FontSize',14, 'Interpreter','latex')
 
 % plot measurements from ode
-%fig5 = figure('units','normalized','outerposition',[0 1 .5 1]);
-%   ^ This line of code isn't compatible with matlab 2024a, had to change it!
 figure(Visible="off")
 plot_states(tarr,y_ode,yunits,[1,3])
 sgtitle('Full Nonlinear Measurements','FontSize',14, 'Interpreter','latex')
 
 % Full Nonlinear Dynamics Simulation minus full linearized state
-%fig6 = figure('units','normalized','outerposition',[0 1 .5 1]);
-%   ^ This line of code isn't compatible with matlab 2024a, had to change it!
 figure(Visible="off")
 plot_states(tarr,state_perturbed_ode-full_state,xunits,wrap_indices_x)
 sgtitle('Nonlinear States Minus Linearized States','FontSize',14, 'Interpreter','latex')
 
 % plot measurements from ode minus measurements, linearized
-%fig7 = figure('units','normalized','outerposition',[0 1 .5 1]);
-%   ^ This line of code isn't compatible with matlab 2024a, had to change it!
 figure(Visible="off")
 plot_states(tarr,y_ode-y_linearized,dyunits,[1,3])
 sgtitle('Nonlinear Measurements Minus Linearization Measurements','FontSize',14, 'Interpreter','latex')
@@ -168,10 +155,12 @@ sgtitle('Nonlinear Measurements Minus Linearization Measurements','FontSize',14,
 % together) 
 figure(Visible="off")
 plot_both_states(tarr,state_perturbed_ode,full_state,xunits,wrap_indices_x)
+legend('Nonlinear','Linearized','FontSize',12,'Interpreter','latex')
 sgtitle('Nonlinear and Linearized States','FontSize',14, 'Interpreter','latex')
 
 figure(Visible="off")
 plot_both_states(tarr,y_ode,y_linearized,yunits,[1,3])
+legend('Nonlinear','Linearized','FontSize',12,'Interpreter','latex')
 sgtitle('Nonlinear and Linearized Measurements','FontSize',14, 'Interpreter','latex')
 
 
@@ -187,8 +176,8 @@ MC_num = 100; % number of monte carlo simulations
 % initialize covariance matrix 
     % 6x6, for each timestep, for each MC
 Pk_plus_all = zeros(6,6,length(tarr),MC_num); % Pk plus
-Sk_all = zeros(5,5,length(tarr),MC_num); % Pk plus
-innovation_all = zeros(5,length(tarr),MC_num);
+Sk_all = zeros(5,5,length(tarr),MC_num); % Sk
+innovation_all = zeros(5,length(tarr),MC_num); % innovation vextor
 
 % initialize state matrix
     % 6x1, for each timestep, for each MC
@@ -227,8 +216,7 @@ for m = 1:MC_num % for each MC iteration
 
     % initialize KF
     dxhat0_LKF = deltx0; % initial perturbation state estimate
-    du0_LKF = [0;0;0;0]; % fill in with real numbers later!!
-
+    du0_LKF = [0;0;0;0]; % zeros
     for k = 2:length(tarr) % for each timestep k 
 
         t1 = tarr(k-1);
@@ -238,15 +226,17 @@ for m = 1:MC_num % for each MC iteration
         vk = mvnrnd(zeros(1, 5), R)'; % Measurement noise
 
         my_ode = @(t,y) NL_ode(t,y,v_g0,phi_g0,v_a0,omega_a0,wk(1:3),wk(4:6),L);
-        [t,x] = ode45(my_ode,[t1 t2],x_truth_sim(:,k-1,m)); % need to add in wk?
+        [t,x] = ode45(my_ode,[t1 t2],x_truth_sim(:,k-1,m)); 
         x_truth_sim(:,k,m) = x(end,:)';
 
         y_truth_sim(:,k,m) = calc_obs_from_state(x_truth_sim(:,k,m),vk);
 
     end
     
+    % perform LKF
     [Pk,dyhat,dxhat,innovation,Sk,xsigmas,ysigmas] = LKF(y_truth_sim(:,:,m),dxhat0_LKF,P0_LKF,du0_LKF,tarr,Q_LKF,R_LKF,Abar,Bbar,H,xnom);
 
+    % Save important values
     xsigmas_all(:,:,m) = xsigmas;
     ysigmas_all(:,:,m) = ysigmas;
     dxhat_all(:,:,m) = dxhat;
@@ -272,57 +262,26 @@ figure()
 plot_KF(tarr, y_truth_sim(:,:,5), y_all(:,:,5), ysigmas_all(:,:,5), yunits, wrap_indices_y)
 sgtitle('Simulated Measurements, Linearized KF','FontSize',14, 'Interpreter','latex')
 
-% Plotting errors
+% Plotting state (x) errors
 figure()
 plot_errors(tarr,x_truth_sim(:,:,5) - xhat_all(:,:,5),xsigmas_all(:,:,5),xunits)
 sgtitle('State Errors, Linearized KF','FontSize',14, 'Interpreter','latex')
 
+% Plotting measurement (y) errors
 figure()
 plot_errors(tarr(2:end),innovation_all(:,2:end,5),ysigmas_all(:,2:end,5), yunits)
 sgtitle('Measurement Errors, Linearized KF','FontSize',14, 'Interpreter','latex')
-%% NEES test
+
+% NEES test
 xhat_plus = repmat(xnom,1,1,MC_num) + dxhat_all;
 alpha_NEES = 0.05;
 [did_pass_NEES,too_many_inside_NEES,fig_handle_NEES] = NEES(x_truth_sim, xhat_plus,Pk_plus_all,alpha_NEES,1);
-% Inputs:
-% - total state xhat^plus(k) = xnom(k) + dxhat^plus(k)
-% - xtruth, xhat_plus = n x length of time array x N
-% - N = number MC simulation runs
-% - Pk_plus = n x n x length of time array x N
-% - alpha = scalar = significance level
-% - show_plot = optional, if true then plot result
 
-%% NIS test
+% NIS test
 alpha_NIS = alpha_NEES;
 [did_pass_NIS,too_many_inside_NIS,fig_handle_NIS] = NIS(innovation_all,Sk_all,alpha_NIS,1);
-% Inputs:
-% - total measurement state yhat(k) = ynom(k) + dyhat(k)
-% - ytruth, yhat_plus = p x length of time array x N
-% - N = number MC simulation runs
-% - Sk = n x n x length of time array x N
-% - alpha = scalar = significance level
-% - show_plot = optional, if true then plot result
-
-
-%% validation
-for i=1:length(tarr)
-    good_times = [.1,12.4,24.3];
-    if not(isempty(find(good_times==tarr(i))))
-        for j = 1:size(y_linearized,1)
-            if (j==3 || j==1)
-                toplot1 = mod(y_linearized(j,i)+pi,2*pi)-pi;
-                toplot2 = mod(y_ode(j,i)+pi,2*pi)-pi;
-            else
-                toplot1= y_linearized(j,i);
-                toplot2 = y_ode(j,i);
-            end
-            sprintf('%d, %2.2f, %2.2f, %2.2f',j,tarr(i),toplot1,toplot2)
-        end
-    end
-end
 
 %% Part II, Problem 5
-
 
 % Initialization
 Pk_plus_all = zeros(6, 6, length(tarr), MC_num); % State covariance
@@ -335,7 +294,7 @@ sigmas_all = zeros(6, 6, length(tarr), MC_num);
 x_truth_sim=zeros(6,length(tarr), MC_num);
 y_truth_sim = zeros(5, length(tarr),MC_num);
 
-xhat0_EKF = xtrue0;
+xhat0_EKF = xnom(:,1);
 Pk0_EKF = diag([300 300 10 300 300 10]); 
 Q_EKF = Q;
 
@@ -369,11 +328,12 @@ for m = 1:MC_num % Monte Carlo iterations
 
     % Initialize EKF
 
-    [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect] = EKF(y_truth_sim(:,:,m),xhat0_EKF,Pk0_EKF,unom,L,tarr,Q_EKF,R);
+    [Pk_all, yhat,xhat_p,innovation,Sk_collect,sigmas_collect,xsigmas,ysigmas] = EKF(y_truth_sim(:,:,m),xhat0_EKF,Pk0_EKF,unom,L,tarr,Q_EKF,R);
+    
     % Save results for this Monte Carlo iteration
     Pk_plus_all(:, :, :, m) = Pk_all;
     y_all(:, :, m) = yhat;
-    xhat_all(:, :, m) = xhat;
+    xhat_all(:, :, m) = xhat_p;
     innovation_all(:,:,m) = innovation;
     Sk_all(:,:,:,m) = Sk_collect;
 
@@ -386,7 +346,6 @@ end
 
 % error1 = y_truth_sim(:,2:end,5)-y_all(:,2:end,5);
 % error1(1,:)
-
 
 %% Plots for Problem 5a/EKF
 % Plots for a single ‘typical’ simulation instance, showing the noisy simulated ground truth
@@ -407,7 +366,6 @@ figure()
 error1 = x_truth_sim(:,:,5)-xhat_all(:,:,5);
 plot_error(tarr(2:end), error1(:,2:end),sigmas_all(:,:,2:end,:), xunits)
 
-
 % Plot ground truth positions
 figure();
 hold on;
@@ -421,29 +379,14 @@ ylabel('$\eta$ (m)', 'FontSize',12,'Interpreter', 'latex');
 legend('Ground Vehicle', 'Air Vehicle','FontSize',12, 'Interpreter', 'latex');
 title('GT Ground and Air Vehicle Positions');
 
-
-%% NEES test for EKF
-xhat_plus = xhat_all; % Is this correct for EKF version?
+% NEES test for EKF
+xhat_plus = xhat_all; 
 alpha_NEES = 0.05;
 [did_pass_NEES,too_many_inside_NEES,fig_handle_NEES] = NEES(x_truth_sim, xhat_plus,Pk_plus_all,alpha_NEES,1);
-% Inputs:
-% - total state xhat^plus(k) = xnom(k) + dxhat^plus(k)
-% - xtruth, xhat_plus = n x length of time array x N
-% - N = number MC simulation runs
-% - Pk_plus = n x n x length of time array x N
-% - alpha = scalar = significance level
-% - show_plot = optional, if true then plot result
 
-%% NIS test for EKF
+% NIS test for EKF
 alpha_NIS = alpha_NEES;
 [did_pass_NIS,too_many_inside_NIS,fig_handle_NIS] = NIS(innovation_all,Sk_all,alpha_NIS,1);
-% Inputs:
-% - total measurement state yhat(k) = ynom(k) + dyhat(k)
-% - ytruth, yhat_plus = p x length of time array x N
-% - N = number MC simulation runs
-% - Sk = n x n x length of time array x N
-% - alpha = scalar = significance level
-% - show_plot = optional, if true then plot result
 
 
 %% Part II number 6
@@ -451,56 +394,62 @@ alpha_NIS = alpha_NEES;
 ydata = coopData.ydata;
 tvec = coopData.tvec;
 
-
 % EKF
-[Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(ydata,xhat0_EKF,Pk0_EKF,unom,L,tvec,Q_EKF,R);
+[Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,xsigmas,ysigmas] = EKF(ydata,xhat0_EKF,Pk0_EKF,unom,L,tvec,Q_EKF,R);
 
-
-% noisy measured data + corresponding EKF estimation
+% measurements + corresponding KF estimation
 fig_EKF_yadata = figure();
 plot_EKF(tvec(2:end), ydata(:,2:end), yhat(:,2:end), yunits, wrap_indices_y,1)
 sgtitle('Measurements, EKF for ydata','FontSize',14, 'Interpreter','latex')
 saveas(fig_EKF_yadata, 'images/EKF_ydata_pt6.png')
 
-% plot errors
-fig_EKF_error_yadata=figure();
-error_y = ydata-yhat;
-error_y(1,:) = wrapToPi(error_y(1,:));
-error_y(3,:) = wrapToPi(error_y(3,:));
-plot_errors(tvec, error_y,ysigmas, yunits)
-sgtitle('Measurement Error Estimate, EKF for ydata','FontSize',14, 'Interpreter','latex')
-subplot(5,1,1)
-ylim([-2*pi, 2*pi]/10)
-subplot(5,1,3)
-ylim([-2*pi, 2*pi]/10)
-saveas(fig_EKF_error_yadata, 'images/EKF_error_ydata_pt6.png')
+% plot 2*sigma_x
+xsigmas_EKF = xsigmas;
+fig_EKF_xerror_yadata=figure();
+plot_errors(tvec,nan(size(xsigmas)),xsigmas, xunits,[40,50,.5,20,20,1])
+sgtitle('State Error Estimate, LKF for ydata','FontSize',14, 'Interpreter','latex')
+legend('','+-$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
+saveas(fig_EKF_xerror_yadata, 'images/EKF_xerror_ydata_pt6.png')
 
-
-
-
-
-%% LKF
+% LKF
 [Pk,dyhat,dxhat,innovation,Sk,xsigmas,ysigmas] = LKF(ydata,dxhat0_LKF,P0_LKF,du0_LKF,tvec,Q_LKF,R_LKF,Abar,Bbar,H,xnom);
 yhat_LKF = dyhat + ynom;
 
-% noisy simulated data + corresponding KF estimation
+% measurements + corresponding KF estimation
 fig_LKF_yadata=figure();
 plot_KF(tvec, ydata, yhat_LKF, ysigmas, yunits, wrap_indices_y)
 sgtitle('Measurements, LKF for ydata','FontSize',14, 'Interpreter','latex')
 legend('Ground truth', 'KF output','FontSize',12,'Interpreter','latex')
 saveas(fig_LKF_yadata, 'images/LKF_ydata_pt6.png')
 
+% plot innovation vector and 2*sigma_y
 fig_LKF_error_yadata=figure();
-plot_errors(tvec(2:end),innovation(:,2:end),ysigmas(:,2:end), yunits)
+plot_errors(tvec(2:end),innovation(:,2:end),ysigmas(:,2:end), xunits)
 sgtitle('Measurement Error Estimate, LKF for ydata','FontSize',14, 'Interpreter','latex')
 saveas(fig_LKF_error_yadata, 'images/LKF_error_ydata_pt6.png')
 
-%Plotting the states themselves
+% plot 2*sigma_x
+fig_LKF_xerror_yadata=figure();
+plot_errors(tvec,nan(size(xsigmas)),xsigmas, xunits,[40,50,.5,20,20,1])
+sgtitle('State Error Estimate, LKF for ydata','FontSize',14, 'Interpreter','latex')
+legend('','+-$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
+saveas(fig_LKF_xerror_yadata, 'images/LKF_xerror_ydata_pt6.png')
+
+% state errors for both KFs plotted together
+fig_KF_xerror_yadata=figure();
+plot_both_states(tvec,xsigmas,xsigmas_EKF, xunits, wrap_indices_x,[40,40,.7,15,15,1])
+sgtitle('State Error Estimate for LKF and EKF','FontSize',14, 'Interpreter','latex')
+legend('LKF +-$2\sigma$ Error Bound','EKF +-$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
+saveas(fig_KF_xerror_yadata, 'images/all_KF_xerror_ydata_pt6.png')
+
+% Plotting the states themselves
 fig_state_est_yadata = figure();
+
 %plot_states(tvec,xhat,xunits,wrap_indices_x)
 plot_both_states(tvec,xhat,(dxhat+xnom), xunits, wrap_indices_x)
 sgtitle('State Estimation from ydata','FontSize',14, 'Interpreter','latex')
 legend('EKF', 'LKF','FontSize',12, 'Interpreter', 'latex');
+
 saveas(fig_state_est_yadata, 'images/state_est.png')
 
 %% Ode45 Function
@@ -607,16 +556,20 @@ end
 
 %% Plotting Functions
 
-function plot_states(tarr,state,ylabels,wrap_indices)
+function plot_states(tarr,state,ylabels,wrap_indices,line_type)
 % plot the states using subplots
     for iw = 1:length(wrap_indices)
         state(wrap_indices(iw),:)= mod(state(wrap_indices(iw),:)+pi,2*pi)-pi;  
+    end
+    lw = 2;
+    if not(exist('line_type','var'))
+        line_type = '-';
     end
 
     for i=1:size(state,1)
         subplot(size(state,1),1,i)
         hold on
-        plot(tarr,state(i,:))%,'Color','blue','LineWidth',1.5)
+        plot(tarr,state(i,:),line_type,'linewidth',lw)%,'Color','blue','LineWidth',1.5)
         ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
         grid on
@@ -626,7 +579,7 @@ function plot_states(tarr,state,ylabels,wrap_indices)
 end
 
 % ------ Another Plotting Function ---------
-function plot_both_states(tarr,state1,state2,ylabels,wrap_indices)
+function plot_both_states(tarr,state1,state2,ylabels,wrap_indices,lims)
 % plot the states using subplots
     for iw = 1:length(wrap_indices)
         state1(wrap_indices(iw),:)= mod(state1(wrap_indices(iw),:)+pi,2*pi)-pi;  
@@ -641,15 +594,18 @@ function plot_both_states(tarr,state1,state2,ylabels,wrap_indices)
         ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
         grid on
-        legend('Nonlinear','Linearized','FontSize',12,'Interpreter','latex')
+        if exist('lims','var')
+            ylim([-lims(i) lims(i)])
+        end
+        
     end
 
 end
 
 % ------ Error Plotting Function
-function plot_errors(tarr,errors,sigmas,ylabels)
+function plot_errors(tarr,errors,sigmas,ylabels,lims)
 % plot the states using subplots
-
+    
     for i=1:size(errors,1)
         subplot(size(errors,1),1,i)
         plot(tarr,errors(i,:),'Color','red','LineWidth',1.5)
@@ -660,8 +616,12 @@ function plot_errors(tarr,errors,sigmas,ylabels)
         ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
         grid on
-        legend('Error','$2\sigma$ Error Bound','$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
+        if exist('lims','var')
+            ylim([-lims(i) lims(i)])
+        end
+        
     end
+    legend('Error','$2\sigma$ Error Bound','$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
 
 end
 
@@ -865,11 +825,11 @@ end
 
 
 
-function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(y_truth_sim,xhat0,Pk0,unom,L,tarr,Q,R)
+function [Pk_all, yhat,xhat_p,innovation,Sk_collect,sigmas_collect,xsigmas,ysigmas] = EKF(y_truth_sim,xhat0,Pk0,unom,L,tarr,Q,R)
 % Initialize EKF
     dt = tarr(2)-tarr(1);
-    xhat = zeros(6, length(tarr)); 
-    xhat(:, 1) = xhat0; % Initial state estimate
+    xhat_p = zeros(6, length(tarr)); 
+    xhat_p(:, 1) = xhat0; % Initial state estimate
 
     Pk_all = zeros(6, 6, length(tarr)); 
     Pk_all(:, :, 1) = Pk0;
@@ -881,12 +841,13 @@ function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(
     sigmas_collect = zeros(6,6,length(tarr));
     P0 = Pk0;
     sigmas_collect(:,:,1) = diag([2*sqrt(P0(1,1)) 2*sqrt(P0(2,2)) 2*sqrt(P0(3,3)) 2*sqrt(P0(4,4)) 2*sqrt(P0(5,5)) 2*sqrt(P0(6,6))]);
-    y_sigmas = zeros(5,length(tarr));
+    xsigmas = zeros(6,length(tarr));
+    ysigmas = zeros(5,length(tarr));
 
     for k=2:length(tarr)
         % Calculate Jacobians for each time step using current state
-        Abar_k = compute_Abar(xhat(:, k-1), unom(:, k-1)); %does unom change? no
-        Bbar_k = compute_Bbar(xhat(:, k-1), unom(:, k-1)); %does unom change? no
+        Abar_k = compute_Abar(xhat_p(:, k-1), unom(:, k-1)); %does unom change? no
+        Bbar_k = compute_Bbar(xhat_p(:, k-1), unom(:, k-1)); %does unom change? no
 
         Ftild_k = eye(6) + dt * Abar_k; % State transition matrix
         Gtild_k = dt * Bbar_k; % Input matrix.
@@ -898,7 +859,7 @@ function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(
         %EKF prediction
         % From lecture notes: assume wk=0
         my_ode = @(t, y) NL_ode(t, y, unom(1, k-1), unom(2, k-1), unom(3, k-1), unom(4, k-1),zeros(3),zeros(3), L); 
-        [~, xhat_minus] = ode45(my_ode, [tarr(k-1), tarr(k)], xhat(:, k-1));
+        [~, xhat_minus] = ode45(my_ode, [tarr(k-1), tarr(k)], xhat_p(:, k-1));
 
         xhat_minus = xhat_minus(end, :)'; % Take last output as predicted state
         
@@ -932,14 +893,24 @@ function [Pk_all, yhat,xhat,innovation,Sk_collect,sigmas_collect,ysigmas] = EKF(
         ysigma4 = 2*sqrt(Skval(4,4));
         ysigma5 = 2*sqrt(Skval(5,5));
 
+        % extract 2sigma values
+        xsigma1 = 2*sqrt(Pk_plus(1,1));
+        xsigma2 = 2*sqrt(Pk_plus(2,2));
+        xsigma3 = 2*sqrt(Pk_plus(3,3));
+        xsigma4 = 2*sqrt(Pk_plus(4,4));
+        xsigma5 = 2*sqrt(Pk_plus(5,5));
+        xsigma6 = 2*sqrt(Pk_plus(6,6));
+        
+
+
         % Save results
-        xhat(:, k) = xhat_plus;
+        xhat_p(:, k) = xhat_plus;
         Pk_all(:, :, k) = Pk_plus;
         yhat(:,k) = predicted_y;
         innovation(:,k) = ey_k;
         Sk_collect(:,:,k) = Skval;
         sigmas_collect(:,:,k) = diag([2*sqrt(Pk_plus(1,1)) 2*sqrt(Pk_plus(2,2)) 2*sqrt(Pk_plus(3,3)) 2*sqrt(Pk_plus(4,4)) 2*sqrt(Pk_plus(5,5)) 2*sqrt(Pk_plus(6,6))]);
-
+        xsigmas(:,k) = [xsigma1;xsigma2;xsigma3;xsigma4;xsigma5;xsigma6];
         ysigmas(:,k) = [ysigma1;ysigma2;ysigma3;ysigma4;ysigma5];
 
     end
