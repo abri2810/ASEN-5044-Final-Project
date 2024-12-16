@@ -854,7 +854,7 @@ function [Pk_all, yhat,xhat_p,innovation,Sk_collect,sigmas_collect,xsigmas,ysigm
         Omegatild_k = dt * eye(6);   %does this need to change per timestep? No
 
         % Compute Q_k dynamically
-        Q_k = Q; % need to figure out how to change this at every time step
+        Q_k = Q; 
     
         %EKF prediction
         % From lecture notes: assume wk=0
