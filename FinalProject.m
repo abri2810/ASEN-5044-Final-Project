@@ -364,7 +364,7 @@ sgtitle('Simulated Measurements, EKF','FontSize',14, 'Interpreter','latex')
 % plot errors
 figure()
 error1 = x_truth_sim(:,:,5)-xhat_all(:,:,5);
-plot_error(tarr, error1,sigmas_all, xunits)
+plot_error(tarr(2:end), error1(:,2:end),sigmas_all(:,:,2:end,:), xunits)
 
 % Plot ground truth positions
 figure();
@@ -374,9 +374,9 @@ plot(x_truth_sim(1,:,1), x_truth_sim(2,:,1), 'b', x_truth_sim(4,:,1), x_truth_si
 plot(x_truth_sim(1,1,1), x_truth_sim(2,1,1), 'bo', x_truth_sim(4,1,1), x_truth_sim(5,1,1), 'ro');
 plot(x_truth_sim(1,end,1), x_truth_sim(2,end,1), 'bx', x_truth_sim(4,end,1), x_truth_sim(5,end,1), 'rx');
 hold off;
-xlabel('$\xi$ (m)', 'Interpreter', 'latex');
-ylabel('$\eta$ (m)', 'Interpreter', 'latex');
-legend('Ground Vehicle', 'Air Vehicle');
+xlabel('$\xi$ (m)','FontSize',12, 'Interpreter', 'latex');
+ylabel('$\eta$ (m)', 'FontSize',12,'Interpreter', 'latex');
+legend('Ground Vehicle', 'Air Vehicle','FontSize',12, 'Interpreter', 'latex');
 title('GT Ground and Air Vehicle Positions');
 
 % NEES test for EKF
@@ -419,6 +419,7 @@ yhat_LKF = dyhat + ynom;
 fig_LKF_yadata=figure();
 plot_KF(tvec, ydata, yhat_LKF, ysigmas, yunits, wrap_indices_y)
 sgtitle('Measurements, LKF for ydata','FontSize',14, 'Interpreter','latex')
+legend('Ground truth', 'KF output','FontSize',12,'Interpreter','latex')
 saveas(fig_LKF_yadata, 'images/LKF_ydata_pt6.png')
 
 % plot innovation vector and 2*sigma_y
@@ -443,10 +444,12 @@ saveas(fig_KF_xerror_yadata, 'images/all_KF_xerror_ydata_pt6.png')
 
 % Plotting the states themselves
 fig_state_est_yadata = figure();
-plot_states(tvec,xhat,xunits,wrap_indices_x)
+
+%plot_states(tvec,xhat,xunits,wrap_indices_x)
 plot_both_states(tvec,xhat,(dxhat+xnom), xunits, wrap_indices_x)
-sgtitle('State Estimation from ydata')
-legend('EKF', 'LKF')
+sgtitle('State Estimation from ydata','FontSize',14, 'Interpreter','latex')
+legend('EKF', 'LKF','FontSize',12, 'Interpreter', 'latex');
+
 saveas(fig_state_est_yadata, 'images/state_est.png')
 
 %% Ode45 Function
@@ -652,7 +655,7 @@ end
 
         grid on
 
-        legend(truth_label, 'KF output','$2\sigma$ Error Bound','$2\sigma$ Error Bound','Interpreter','latex')
+        legend(truth_label, 'KF output','$2\sigma$ Error Bound','$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
 
        % legend('Simulated ground truth', 'KF output','$2\sigma$ Error Bound','$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
 
@@ -681,7 +684,7 @@ end
         ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
         xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
         grid on
-        legend(truth_label, 'KF output')
+        legend(truth_label, 'KF output','FontSize',12, 'Interpreter','latex')
     end
 
 end
@@ -711,8 +714,8 @@ function plot_error(tarr,error,sigmas_all, ylabels)
             ylabel(ylabels{i},'FontSize',12, 'Interpreter','latex')
             xlabel('Time (s)','FontSize',12, 'Interpreter','latex')
             grid on
-            legend('KF output error','$2\sigma$ Error Bound','$2\sigma$ Error Bound','Interpreter','latex')
-            sgtitle('State Error Estimate')
+            legend('KF output error','$2\sigma$ Error Bound','$2\sigma$ Error Bound','FontSize',12,'Interpreter','latex')
+            sgtitle('State Error Estimate','FontSize',14, 'Interpreter','latex')
         end
 
 end
