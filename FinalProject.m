@@ -57,12 +57,17 @@ theta_g_nom = theta_g0+thetag_dot_nom*tarr;
 thetaa_dot_nom = omega_a0;
 theta_a_nom = theta_a0+thetaa_dot_nom*tarr;
 
-xnom = [xi_g0+v_g0/thetag_dot_nom*sin(theta_g_nom)-v_g0/thetag_dot_nom*sin(theta_g0);...
-        eta_g0-v_g0/thetag_dot_nom*cos(theta_g_nom)+v_g0/thetag_dot_nom*cos(theta_g0);...
-        theta_g_nom;...
-        xi_a0+v_a0/thetaa_dot_nom*sin(theta_a_nom)-v_a0/thetaa_dot_nom*sin(theta_a0);...
-        eta_a0-v_a0/thetaa_dot_nom*cos(theta_a_nom)+v_a0/thetaa_dot_nom*cos(theta_a0);...
-        theta_a_nom];
+% xnom = [xi_g0+v_g0/thetag_dot_nom*sin(theta_g_nom)-v_g0/thetag_dot_nom*sin(theta_g0);...
+%         eta_g0-v_g0/thetag_dot_nom*cos(theta_g_nom)+v_g0/thetag_dot_nom*cos(theta_g0);...
+%         theta_g_nom;...
+%         xi_a0+v_a0/thetaa_dot_nom*sin(theta_a_nom)-v_a0/thetaa_dot_nom*sin(theta_a0);...
+%         eta_a0-v_a0/thetaa_dot_nom*cos(theta_a_nom)+v_a0/thetaa_dot_nom*cos(theta_a0);...
+%         theta_a_nom];
+
+% Calculate xnom (an alternative to the above matrix)
+my_ode = @(t,y) NL_ode(t,y,v_g0,phi_g0,v_a0,omega_a0,[0;0;0],[0;0;0],L);
+[t,xarr] = ode45(my_ode,tarr,xnom_t0);
+xnom=xarr';
 
 unom = repmat(unom_t0,1,length(tarr));
 
@@ -199,9 +204,9 @@ ysigmas_all = zeros(5,length(tarr), MC_num);
 
 % TUNING THE Q MATRIX
     % manually adjusting based on error plots and NEES plots
-Q_LKF = diag([1000, 1000, .4, 100, 100, 3]);
+Q_LKF = diag([1000, 1000, .3, 100, 100, 2]);
 R_LKF = R;
-P0_LKF = diag([.5 .5 .03 400 400 .3]);
+P0_LKF = diag([.5 .5 .03 300 300 .3]);
 
 
 for m = 1:MC_num % for each MC iteration
@@ -291,11 +296,11 @@ xhat_all = zeros(6, length(tarr), MC_num); % Final state estimate
 y_act = zeros(5, length(tarr), MC_num); % Actual measurements
 sigmas_all = zeros(6, 6, length(tarr), MC_num);
 
-x_truth_sim=zeros(6,length(tarr), MC_num);
+x_truth_sim = zeros(6,length(tarr), MC_num);
 y_truth_sim = zeros(5, length(tarr),MC_num);
 
 xhat0_EKF = xnom(:,1);
-Pk0_EKF = diag([300 300 10 300 300 10]); 
+Pk0_EKF = diag([300 300 3 300 300 3]); 
 Q_EKF = Q;
 
 % initialize error bounds
@@ -305,7 +310,7 @@ Q_EKF = Q;
 for m = 1:MC_num % Monte Carlo iterations
 
     % Simulate truth state for NEES and NIS tests
-    xtrue0 = mvnrnd(xnom_t0, Q)'; % initial state
+    xtrue0 = mvnrnd(xnom_t0, Q)'; % initial state 
     x_truth_sim(:,1,m)= xtrue0;
 
     % Simulate measurements
@@ -344,8 +349,6 @@ for m = 1:MC_num % Monte Carlo iterations
     
 end
 
-% error1 = y_truth_sim(:,2:end,5)-y_all(:,2:end,5);
-% error1(1,:)
 
 %% Plots for Problem 5a/EKF
 % Plots for a single ‘typical’ simulation instance, showing the noisy simulated ground truth
@@ -846,12 +849,12 @@ function [Pk_all, yhat,xhat_p,innovation,Sk_collect,sigmas_collect,xsigmas,ysigm
 
     for k=2:length(tarr)
         % Calculate Jacobians for each time step using current state
-        Abar_k = compute_Abar(xhat_p(:, k-1), unom(:, k-1)); %does unom change? no
-        Bbar_k = compute_Bbar(xhat_p(:, k-1), unom(:, k-1)); %does unom change? no
+        Abar_k = compute_Abar(xhat_p(:, k-1), unom(:, k-1));
+        Bbar_k = compute_Bbar(xhat_p(:, k-1), unom(:, k-1)); 
 
         Ftild_k = eye(6) + dt * Abar_k; % State transition matrix
         Gtild_k = dt * Bbar_k; % Input matrix.
-        Omegatild_k = dt * eye(6);   %does this need to change per timestep? No
+        Omegatild_k = dt * eye(6);  
 
         % Compute Q_k dynamically
         Q_k = Q; 
@@ -870,15 +873,16 @@ function [Pk_all, yhat,xhat_p,innovation,Sk_collect,sigmas_collect,xsigmas,ysigm
 
         % innovation
         predicted_y = compute_Y(xhat_minus);
-        Htild_k = compute_Cbar(xhat_minus); % I believe this is the same as dh/dx from Lecture 32 slide 7
+        Htild_k = compute_Cbar(xhat_minus);
 
         ey_k = y_truth_sim(:, k) - predicted_y; % Actual measurements - predicted  
-        ey_k(1) = wrapToPi(ey_k(1));
-        ey_k(3) = wrapToPi(ey_k(3));
+        padding = 1e-6; % tiny tolerance
+        ey_k(1) = mod(ey_k(1) + pi + padding, 2*pi) - pi - padding;
+        ey_k(3) = mod(ey_k(3) + pi + padding, 2*pi) - pi - padding;
         
         % correction
         Sk = Htild_k * Pk_minus * Htild_k' + R;
-        Skval = 0.5*(Sk + Sk'); %taken from part 4. Do we need this?
+        Skval = 0.5*(Sk + Sk');
 
         Kk = Pk_minus * Htild_k' / Sk;
 
@@ -920,7 +924,7 @@ function [Pk,dyhat,dxhat,innovation,Sk,xsigmas,ysigmas] = LKF(y_truth_sim,dxhat0
 
     
     % ----------------
-    % Next, use the simulated "truth" measurements as inputs to KF
+    % Use the simulated "truth" measurements as inputs to KF
 
     % initialize KF
     dxhat = zeros(6,length(tarr)); 
@@ -968,8 +972,6 @@ function [Pk,dyhat,dxhat,innovation,Sk,xsigmas,ysigmas] = LKF(y_truth_sim,dxhat0
         pretend_y_data = y_truth_sim(:,k); % this is y_k+1
         % y* contains NO NOISE
         predicted_y = compute_Y(xnom(:,k)); % this is y*_k+1
-        predicted_y(1,:) = wrapToPi(predicted_y(1,:));
-        predicted_y(3,:) = wrapToPi(predicted_y(3,:));
         dy = pretend_y_data-predicted_y;
         innovation_k = dy-Htild_k*dxhat_minus; 
         % angle wrapping - rows 1 and 3 of the innovation vector
